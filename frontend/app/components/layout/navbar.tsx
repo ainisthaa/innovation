@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { LoginDialog } from "../auth/LoginDialog";
-import { SettingDialog } from "../auth/SettingDialog";
+import { SettingDropdown } from "../auth/SettingDropdown";
 
 export function Navbar() {
   const pathname = usePathname();
@@ -64,13 +64,12 @@ export function Navbar() {
 
       {/* ปุ่มขวาสุด */}
       <div className="flex-1 flex justify-end text-sm font-medium">
-        {user ? (
-          <SettingDialog user={user} onLogout={() => setUser(null)} />
-        ) : (
-          <LoginDialog
-            onLogin={(id, name) => setUser({ studentId: id, name })}
-          />
-        )}
+       {user ? (
+      <SettingDropdown user={user} onLogout={() => setUser(null)} />
+    ) : (
+      <LoginDialog onLogin={(id, name) => setUser({ studentId: id, name })} />
+    )}
+
       </div>
     </nav>
   );
