@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ActivityCard } from "../components/home/ActivityCard";
+import { ActivityCard } from "@/app/components/home/ActivityCard";
 
 export default function FavoritePage() {
   const [favorites, setFavorites] = useState<number[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
 
-  // 🔹 mock data จำลอง (จะถูกแทนที่ด้วยข้อมูลจาก backend ภายหลัง)
+  // 🧩 mock ข้อมูลกิจกรรมทั้งหมด (ในระบบจริงจะมาจาก API)
   const allActivities = Array.from({ length: 20 }, (_, i) => ({
     id: i + 1,
     title: `กิจกรรมที่ ${i + 1}`,
@@ -15,27 +15,48 @@ export default function FavoritePage() {
     description:
       "รายละเอียดกิจกรรม Lorem ipsum dolor sit amet consectetur adipiscing elit.",
     imgSrc: "/images/activity.png",
-    isOpen: i % 2 === 0,
+    status: i % 3 === 0 ? "open" : i % 2 === 0 ? "open" : "open",
     views: 100 + i * 5,
   }));
 
-  // 🧠 โหลด favorites จาก localStorage ตอนเปิดหน้า
+  // ✅ โหลด favorites จาก localStorage
+  const loadFavorites = () => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("favorites") || "[]");
+      setFavorites(stored);
+      setActivities(allActivities.filter((a) => stored.includes(a.id)));
+    } catch (err) {
+      console.error("Error reading favorites:", err);
+    }
+  };
+
   useEffect(() => {
-    const stored = JSON.parse(localStorage.getItem("favorites") || "[]");
-    setFavorites(stored);
-    setActivities(allActivities.filter((a) => stored.includes(a.id)));
+    loadFavorites();
+
+    // ✅ ฟัง event จากทุกหน้า (ทั้งในแท็บเดียวและข้ามแท็บ)
+    const updateListener = () => loadFavorites();
+    window.addEventListener("favoritesUpdated", updateListener);
+    window.addEventListener("storage", updateListener);
+
+    return () => {
+      window.removeEventListener("favoritesUpdated", updateListener);
+      window.removeEventListener("storage", updateListener);
+    };
   }, []);
 
-  // ❤️ toggle favorite (คลิกหัวใจเพื่อลบออก)
+  // ❤️ เมื่อกดหัวใจใน ActivityCard
   const handleToggleFavorite = (id: number) => {
-    setFavorites((prev) => {
-      const updated = prev.includes(id)
-        ? prev.filter((fid) => fid !== id)
-        : [...prev, id];
-      localStorage.setItem("favorites", JSON.stringify(updated));
-      setActivities(allActivities.filter((a) => updated.includes(a.id)));
-      return updated;
-    });
+    const stored = JSON.parse(localStorage.getItem("favorites") || "[]");
+    const updated = stored.includes(id)
+      ? stored.filter((fid: number) => fid !== id)
+      : [...stored, id];
+
+    localStorage.setItem("favorites", JSON.stringify(updated));
+    setFavorites(updated);
+    setActivities(allActivities.filter((a) => updated.includes(a.id)));
+
+    // ✅ แจ้งให้ทุกหน้าทราบทันที
+    window.dispatchEvent(new CustomEvent("favoritesUpdated"));
   };
 
   return (
@@ -49,9 +70,15 @@ export default function FavoritePage() {
           {activities.map((a) => (
             <ActivityCard
               key={a.id}
-              {...a}
-              isFavorite={favorites.includes(a.id)} // ✅ หัวใจทึบ
-              onToggleFavorite={handleToggleFavorite} // ✅ เอาออกได้
+              id={a.id}
+              title={a.title}
+              category={a.category}
+              description={a.description}
+              imgSrc={a.imgSrc}
+              status={a.status}
+              views={a.views}
+              isFavorite={favorites.includes(a.id)} // ✅ แสดงหัวใจเต็ม
+              onToggleFavorite={handleToggleFavorite} // ✅ ลบ/เพิ่มจากหน้านี้ได้
             />
           ))}
         </div>

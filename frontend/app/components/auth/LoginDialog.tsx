@@ -6,40 +6,50 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { JSX } from "react";
 
-interface LoginDialogProps {
-  onLogin?: (studentId: string, name: string) => void;
-}
+import { useAuth } from "@/app/context/AuthContext";
+import pb from "@/lib/pocketbase";
 
-export function LoginDialog({ onLogin }: LoginDialogProps): JSX.Element {
+export function LoginDialog() {
+  const { login, isLoginOpen, setLoginOpen } = useAuth();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState("");
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // จำลอง login
-    const fakeId = "66050103";
-    const fakeName = "สมชาย สุวรรณศรี";
-    onLogin?.(fakeId, fakeName);
+    setError("");
+    setLoading(true);
+
+    try {
+      // ✅ 1) เรียก API ล็อกอิน PocketBase
+      const authData = await pb
+        .collection("users")
+        .authWithPassword(email, password);
+
+      // ✅ 2) บันทึก token + user ลงใน AuthContext
+      login(authData.record.id, authData.record.name);
+
+      // ✅ 3) ปิด dialog
+      setLoginOpen(false);
+    } catch (err: any) {
+      console.error("Login failed:", err);
+      setError("อีเมลหรือรหัสผ่านไม่ถูกต้อง");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <span className="text-[#E35205] font-semibold hover:underline cursor-pointer">
-          เข้าสู่ระบบ
-        </span>
-      </DialogTrigger>
-
+    <Dialog open={isLoginOpen} onOpenChange={setLoginOpen}>
       <DialogContent
-        className="w-[502px] h-[471px] rounded-[10px] flex flex-col items-center justify-center px-8"
+        className="w-[502px] h-[480px] rounded-[10px] flex flex-col items-center justify-center px-8"
         aria-describedby={undefined}
       >
         <DialogHeader>
@@ -60,6 +70,7 @@ export function LoginDialog({ onLogin }: LoginDialogProps): JSX.Element {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="example@kmitl.ac.th"
               className="border border-gray-400 rounded-md h-[40px]"
+              required
             />
           </div>
 
@@ -74,16 +85,22 @@ export function LoginDialog({ onLogin }: LoginDialogProps): JSX.Element {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               className="border border-gray-400 rounded-md h-[40px]"
+              required
             />
           </div>
+
+          {error && (
+            <p className="text-red-600 text-sm text-center">{error}</p>
+          )}
 
           <DialogClose asChild>
             <Button
               type="submit"
+              disabled={loading}
               className="w-[176px] h-[45px] rounded-[10px] bg-[#FF730F] hover:bg-[#e6690e]
                          text-white font-bold text-base px-[38px] py-[13px] self-center"
             >
-              เข้าสู่ระบบ
+              {loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
             </Button>
           </DialogClose>
         </form>

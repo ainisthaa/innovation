@@ -3,16 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { ChevronDown } from "lucide-react";
-import { useState } from "react";
-import { LoginDialog } from "../auth/LoginDialog";
+import { useAuth } from "@/app/context/AuthContext";
 import { SettingDropdown } from "../auth/SettingDropdown";
 
 export function Navbar() {
   const pathname = usePathname();
-  const [user, setUser] = useState<{ studentId: string; name: string } | null>(
-    null
-  );
+  const { user, openLogin, logout } = useAuth();
 
   const baseLinks = [
     { href: "/", label: "หน้าหลัก" },
@@ -64,12 +60,16 @@ export function Navbar() {
 
       {/* ปุ่มขวาสุด */}
       <div className="flex-1 flex justify-end text-sm font-medium">
-       {user ? (
-      <SettingDropdown user={user} onLogout={() => setUser(null)} />
-    ) : (
-      <LoginDialog onLogin={(id, name) => setUser({ studentId: id, name })} />
-    )}
-
+        {user ? (
+          <SettingDropdown user={user} onLogout={logout} />
+        ) : (
+          <button
+            onClick={openLogin}
+            className="text-[#E35205] font-semibold hover:underline cursor-pointer"
+          >
+            เข้าสู่ระบบ
+          </button>
+        )}
       </div>
     </nav>
   );

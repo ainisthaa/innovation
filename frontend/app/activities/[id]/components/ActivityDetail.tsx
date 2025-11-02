@@ -2,9 +2,13 @@
 
 import Image from "next/image";
 import { Pencil, Heart } from "lucide-react";
+import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
+import { useAuth } from "@/app/context/AuthContext";
 
 interface ActivityDetailProps {
   activity: {
+    id?: number;
     title: string;
     category: string;
     description: string;
@@ -19,9 +23,34 @@ interface ActivityDetailProps {
 }
 
 export function ActivityDetail({ activity }: ActivityDetailProps) {
+  const [isFavorite, setIsFavorite] = useState(false);
+
+  // โหลดสถานะ favorite จาก localStorage
+  useEffect(() => {
+    const stored = JSON.parse(localStorage.getItem("favorites") || "[]");
+    if (activity.id && stored.includes(activity.id)) {
+      setIsFavorite(true);
+    }
+  }, [activity.id]);
+  const { user, openLogin } = useAuth();
+
+  const toggleFavorite = () => {
+    
+    const stored = JSON.parse(localStorage.getItem("favorites") || "[]");
+
+    const updated = isFavorite
+      ? stored.filter((id: number) => id !== activity.id)
+      : [...stored, activity.id];
+
+    localStorage.setItem("favorites", JSON.stringify(updated));
+    setIsFavorite(!isFavorite);
+
+    // แจ้งให้หน้าอื่นอัปเดตทันที
+    window.dispatchEvent(new Event("storage"));
+  };
+
   return (
     <section className="max-w-4xl mx-auto px-4 py-10">
-      {/* 🔸 รูปกิจกรรม */}
       <Image
         src={activity.imgSrc}
         alt={activity.title}
@@ -30,7 +59,6 @@ export function ActivityDetail({ activity }: ActivityDetailProps) {
         className="rounded-lg shadow-md w-full object-cover"
       />
 
-      {/* 🔸 ป้ายสถานะ */}
       <div className="flex justify-center mt-4">
         <span
           className={`text-sm font-semibold px-3 py-1 rounded-md ${
@@ -41,7 +69,6 @@ export function ActivityDetail({ activity }: ActivityDetailProps) {
         </span>
       </div>
 
-      {/* 🔸 ข้อมูลกิจกรรม */}
       <h1 className="text-center text-xl font-bold mt-3">{activity.title}</h1>
 
       <div className="mt-6 space-y-4">
@@ -59,7 +86,6 @@ export function ActivityDetail({ activity }: ActivityDetailProps) {
         </p>
       </div>
 
-      {/* 🔸 กล่องวันเวลา / จำนวนรับ */}
       <div className="flex justify-left gap-6 mt-8 flex-wrap">
         <div className="bg-[#FF9236] text-black rounded-[10px] px-6 py-3 text-center w-[230px]">
           <p className="font-semibold">เปิดรับสมัคร</p>
@@ -77,7 +103,6 @@ export function ActivityDetail({ activity }: ActivityDetailProps) {
         </div>
       </div>
 
-      {/* 🔸 รายละเอียดกิจกรรม */}
       <div className="mt-10">
         <h2 className="font-bold mb-2">รายละเอียดกิจกรรม</h2>
         <p className="text-justify leading-relaxed text-gray-800">
@@ -85,7 +110,6 @@ export function ActivityDetail({ activity }: ActivityDetailProps) {
         </p>
       </div>
 
-      {/* 🔸 ผู้จัดและช่องทางติดต่อ */}
       <div className="mt-8 space-y-6">
         <div>
           <h3 className="font-bold text-lg">จัดกิจกรรมโดย</h3>
@@ -109,18 +133,26 @@ export function ActivityDetail({ activity }: ActivityDetailProps) {
         </button>
 
         {/* ปุ่มรายการโปรด */}
-        <button
+        <motion.button
+          onClick={toggleFavorite}
+          whileTap={{ scale: 1.15 }}
+          transition={{ type: "spring", stiffness: 300 }}
           className="w-[335px] h-[130px] bg-[#F7F7F7] border border-black/25 rounded-[20px]
                      flex flex-col items-center justify-center hover:shadow-md transition-all"
         >
           <span className="font-bold text-xl text-black mb-2">
-            เพิ่มลงรายการโปรด
+            {isFavorite ? "ลบออกจากรายการโปรด" : "เพิ่มลงรายการโปรด"}
           </span>
-          <Heart size={42} strokeWidth={2.5} className="text-[#FF9236]" />
-        </button>
+          <Heart
+            size={42}
+            strokeWidth={2.5}
+            className={`transition-all duration-300 ${
+              isFavorite ? "fill-[#FF9236] text-[#FF9236]" : "text-[#FF9236]"
+            }`}
+          />
+        </motion.button>
       </div>
 
-      {/* 🔸 เส้นคั่น */}
       <hr className="my-10 border-t border-gray-300" />
     </section>
   );

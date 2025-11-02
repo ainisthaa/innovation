@@ -1,0 +1,133 @@
+/* 🌟 จัด layout ปฏิทินให้เหมือนต้นฉบับ */
+.calendar-container {
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+/* 🔸 ปรับ toolbar */
+.rbc-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+/* 🔸 ชื่อเดือน */
+.rbc-toolbar-label {
+  text-align: left;
+  font-weight: 700;
+  font-size: 1.4rem;
+  color: black;
+}
+
+/* 🔸 ปุ่มเลื่อนเดือน */
+.calendar-nav-btn {
+  background: white;
+  border: 1px solid #ddd;
+  color: black;
+  font-size: 1.4rem;
+  line-height: 1;
+  border-radius: 6px;
+  width: 35px;
+  height: 35px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.calendar-nav-btn:hover {
+  background-color: #f5f5f5;
+}
+
+/* 🔸 ปรับตารางให้เหมือนต้นฉบับ */
+.rbc-month-view {
+  border: none !important;
+}
+
+.rbc-month-row + .rbc-month-row {
+  border-top: 1px solid #ddd !important;
+}
+
+.rbc-header {
+  background-color: #fff;
+  border: none !important;
+  font-weight: 600;
+  padding: 10px 0;
+  color: black;
+}
+
+.rbc-date-cell {
+  text-align: right;
+  padding-right: 8px;
+  color: #444;
+}
+
+.rbc-off-range-bg {
+  background: #fafafa !important;
+}
+
+/* 🔸 เส้นตารางของวัน */
+.rbc-day-bg {
+  border: 1px solid #eee !important;
+}
+
+/* 🔸 ช่องวันว่าง */
+.rbc-row-content {
+  padding: 2px 4px;
+}
+
+/* 🔸 ช่องวันที่เลือก */
+.rbc-selected-cell {
+  background-color: rgba(255, 146, 54, 0.1) !important;
+}
+
+/* 🔸 วันที่วันนี้ */
+.rbc-today {
+  background-color: #fff3e0 !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* 🔸 ข้อความของเดือน */
+.rbc-toolbar-label {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+/* 🔸 จัดให้ปฏิทินอยู่กลางจอ */
+.rbc-calendar {
+  margin: 0 auto;
+  width: 90%;
+}
+
+/* 🚫 ลบกรอบน้ำเงินทั้งหมดออกจาก event */
+.rbc-event,
+.rbc-day-slot .rbc-background-event {
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  background-clip: padding-box !important;
+}
+
+/* 🔧 ป้องกัน hover หรือ focus แล้วมีกรอบกลับมา */
+.rbc-event:focus,
+.rbc-event:active,
+.rbc-event:hover {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* 🔧 ลบ pseudo-element ที่ react-big-calendar แอบใช้ */
+.rbc-event::before,
+.rbc-event::after {
+  content: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* ✅ ถ้าอยากให้สีจาก JS (event.color) ทับแน่นอน */
+.rbc-event {
+  background-color: inherit !important;
+}

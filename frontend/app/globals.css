@@ -121,3 +121,33 @@
     @apply bg-background text-foreground;
   }
 }
+.react-calendar {
+  border: none !important;
+  width: 80% !important;
+  max-width: 900px;
+  background-color: white;
+  border-radius: 8px;
+  font-family: 'Prompt', sans-serif;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.react-calendar__tile {
+  height: 80px;
+  vertical-align: top;
+}
+
+.react-calendar__tile--now {
+  background: #fff4e6 !important;
+  border-radius: 6px;
+}
+
+.react-calendar__tile--active {
+  background: #ff9236 !important;
+  color: white !important;
+  border-radius: 6px;
+}
+
+.react-calendar__navigation button {
+  color: black;
+  font-weight: 600;
+}
