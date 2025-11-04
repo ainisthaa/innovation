@@ -10,12 +10,14 @@ export function Navbar() {
   const pathname = usePathname();
   const { user, openLogin, logout } = useAuth();
 
+  // ✅ กำหนดเมนูพื้นฐาน
   const baseLinks = [
     { href: "/", label: "หน้าหลัก" },
     { href: "/calendar", label: "ปฏิทิน" },
     { href: "/volunteer", label: "ลงกิจกรรม" },
   ];
 
+  // ✅ ถ้าล็อกอินแล้ว เพิ่มเมนู “รายการโปรด”
   const links = user
     ? [...baseLinks, { href: "/favorite", label: "รายการโปรด" }]
     : baseLinks;
@@ -61,8 +63,16 @@ export function Navbar() {
       {/* ปุ่มขวาสุด */}
       <div className="flex-1 flex justify-end text-sm font-medium">
         {user ? (
-          <SettingDropdown user={user} onLogout={logout} />
+          // ✅ แสดง SettingDropdown พร้อมข้อมูล user จาก AuthContext
+          <SettingDropdown
+            user={{
+              studentId: user.email ?? user.id, // ใช้ email หรือ id แทน studentId
+              name: user.name,
+            }}
+            onLogout={logout}
+          />
         ) : (
+          // ✅ ปุ่มเข้าสู่ระบบ
           <button
             onClick={openLogin}
             className="text-[#E35205] font-semibold hover:underline cursor-pointer"

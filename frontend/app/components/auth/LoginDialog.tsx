@@ -6,17 +6,14 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-
 import { useAuth } from "@/app/context/AuthContext";
-import pb from "@/lib/pocketbase";
 
 export function LoginDialog() {
-  const { login, isLoginOpen, setLoginOpen } = useAuth();
+  const { loginWithPocketBase, isLoginOpen, setLoginOpen } = useAuth();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [loading, setLoading] = React.useState(false);
@@ -26,20 +23,10 @@ export function LoginDialog() {
     e.preventDefault();
     setError("");
     setLoading(true);
-
     try {
-      // ✅ 1) เรียก API ล็อกอิน PocketBase
-      const authData = await pb
-        .collection("users")
-        .authWithPassword(email, password);
-
-      // ✅ 2) บันทึก token + user ลงใน AuthContext
-      login(authData.record.id, authData.record.name);
-
-      // ✅ 3) ปิด dialog
+      await loginWithPocketBase(email, password);
       setLoginOpen(false);
-    } catch (err: any) {
-      console.error("Login failed:", err);
+    } catch (err) {
       setError("อีเมลหรือรหัสผ่านไม่ถูกต้อง");
     } finally {
       setLoading(false);
@@ -49,19 +36,19 @@ export function LoginDialog() {
   return (
     <Dialog open={isLoginOpen} onOpenChange={setLoginOpen}>
       <DialogContent
-        className="w-[502px] h-[480px] rounded-[10px] flex flex-col items-center justify-center px-8"
+        className="w-[480px] h-[420px] rounded-[10px] flex flex-col items-center justify-center px-8"
         aria-describedby={undefined}
       >
         <DialogHeader>
           <DialogTitle className="text-center text-lg font-semibold mb-6">
-            กรุณาเข้าสู่ระบบด้วยบัญชี KMITL
+            เข้าสู่ระบบด้วยบัญชีผู้ใช้
           </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleLogin} className="w-full flex flex-col space-y-5">
           <div className="space-y-2">
             <Label htmlFor="email" className="font-semibold text-sm">
-              อีเมล (@kmitl.ac.th)
+              อีเมล
             </Label>
             <Input
               id="email"
@@ -93,16 +80,14 @@ export function LoginDialog() {
             <p className="text-red-600 text-sm text-center">{error}</p>
           )}
 
-          <DialogClose asChild>
-            <Button
-              type="submit"
-              disabled={loading}
-              className="w-[176px] h-[45px] rounded-[10px] bg-[#FF730F] hover:bg-[#e6690e]
-                         text-white font-bold text-base px-[38px] py-[13px] self-center"
-            >
-              {loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
-            </Button>
-          </DialogClose>
+          <Button
+            type="submit"
+            disabled={loading}
+            className="w-[176px] h-[45px] rounded-[10px] bg-[#FF730F] hover:bg-[#e6690e]
+                       text-white font-bold text-base px-[38px] py-[13px] self-center"
+          >
+            {loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
+          </Button>
         </form>
       </DialogContent>
     </Dialog>

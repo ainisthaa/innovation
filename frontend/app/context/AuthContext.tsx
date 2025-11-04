@@ -1,8 +1,7 @@
-"use client";
+"use client"; // ✅ client component ที่ใช้ React state
 
-import pb from "@/lib/pocketbase";
 import React, { createContext, useContext, useEffect, useState } from "react";
-
+import pb from "@/lib/pocketbase";
 
 interface User {
   id: string;
@@ -12,7 +11,7 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
-  login: (id: string, name: string) => void;
+  loginWithPocketBase: (email: string, password: string) => Promise<void>;
   logout: () => void;
   openLogin: () => void;
   isLoginOpen: boolean;
@@ -25,43 +24,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoginOpen, setLoginOpen] = useState(false);
 
-  // ✅ โหลด user ที่เคย login ไว้จาก localStorage + token ของ PocketBase
+  // ✅ โหลดสถานะล็อกอินจาก PocketBase authStore
   useEffect(() => {
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-
-    // ถ้ามี token เก็บไว้ใน pb.authStore แล้ว valid → โหลด user อัตโนมัติ
     if (pb.authStore.isValid && pb.authStore.model) {
       const u = pb.authStore.model;
       setUser({ id: u.id, name: u.name, email: u.email });
     }
   }, []);
 
-  // ✅ login จริงจาก API (เรียกจาก LoginDialog)
-  const login = (id: string, name: string) => {
-    const newUser = { id, name };
-    setUser(newUser);
-    localStorage.setItem("user", JSON.stringify(newUser));
-    setLoginOpen(false);
+  // ✅ ล็อกอินผ่าน PocketBase SDK
+  const loginWithPocketBase = async (email: string, password: string) => {
+    try {
+      const authData = await pb
+        .collection("users")
+        .authWithPassword(email, password);
+
+      const record = authData.record;
+      setUser({ id: record.id, name: record.name, email: record.email });
+      setLoginOpen(false);
+
+      console.log("✅ Login success");
+      console.log("pb.authStore.isValid:", pb.authStore.isValid);
+      console.log("pb.authStore.token:", pb.authStore.token);
+      console.log("pb.authStore.model.id:", pb.authStore.model.id);
+    } catch (err: any) {
+      console.error("❌ Login failed:", err);
+      throw err;
+    }
   };
 
-  // ✅ logout จริง — ล้างทั้ง localStorage และ PocketBase token
+  // ✅ ออกจากระบบ
   const logout = () => {
     pb.authStore.clear();
     setUser(null);
-    localStorage.removeItem("user");
-
-    // แจ้งทุกหน้าให้รู้ว่ามีการ logout
-    window.dispatchEvent(new Event("storage"));
+    console.log("🚪 Logged out.");
   };
 
   const openLogin = () => setLoginOpen(true);
 
   return (
     <AuthContext.Provider
-      value={{ user, login, logout, openLogin, isLoginOpen, setLoginOpen }}
+      value={{
+        user,
+        loginWithPocketBase,
+        logout,
+        openLogin,
+        isLoginOpen,
+        setLoginOpen,
+      }}
     >
       {children}
     </AuthContext.Provider>
