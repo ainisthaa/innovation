@@ -7,17 +7,27 @@ import pb from "@/lib/pocketbase";
 export default function FavoritePage() {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // ✅ โหลด favorites จาก PocketBase
   const loadFavorites = async () => {
+    const userId = pb.authStore.model?.id;
+    if (!userId) {
+      console.warn("⚠️ ยังไม่ได้ล็อกอิน ไม่สามารถโหลด favorites ได้");
+      setFavorites([]);
+      setActivities([]);
+      setLoading(false);
+      return;
+    }
+
     try {
-      // ดึงรายการ favorites พร้อมขยายข้อมูล PostID
+      setLoading(true);
       const list = await pb.collection("Favorites").getList(1, 100, {
         sort: "-created",
         expand: "PostID",
+        filter: `UserID="${userId}"`,
+        requestKey: null,
       });
 
-      // ✅ แปลงข้อมูลให้อยู่ในรูปแบบเดียวกับ ActivityCard
       const posts = list.items
         .map((fav: any) => {
           const post = fav.expand?.PostID;
@@ -36,56 +46,31 @@ export default function FavoritePage() {
             views: post.ViewCount ?? 0,
           };
         })
-        .filter((p) => p !== null);
+        .filter(Boolean);
 
       setFavorites(list.items.map((f: any) => f.PostID));
       setActivities(posts);
     } catch (err) {
       console.error("❌ โหลดข้อมูล favorites ไม่สำเร็จ:", err);
-      setFavorites([]);
-      setActivities([]);
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
     loadFavorites();
-
-    // ✅ อัปเดต favorites แบบเรียลไทม์จาก event
     const updateListener = () => loadFavorites();
     window.addEventListener("favoritesUpdated", updateListener);
-    window.addEventListener("storage", updateListener);
-
-    return () => {
-      window.removeEventListener("favoritesUpdated", updateListener);
-      window.removeEventListener("storage", updateListener);
-    };
+    return () => window.removeEventListener("favoritesUpdated", updateListener);
   }, []);
 
-  // ❤️ เมื่อกดหัวใจใน ActivityCard
-  const handleToggleFavorite = async (id: string) => {
-    try {
-      // ตรวจว่ามี favorite อยู่แล้วหรือไม่
-      const favList = await pb.collection("Favorites").getList(1, 100, {
-        filter: `PostID="${id}"`,
-      });
-
-      if (favList.items.length > 0) {
-        // ถ้ามีอยู่แล้ว → ลบออก
-        await pb.collection("Favorites").delete(favList.items[0].id);
-      } else {
-        // ถ้ายังไม่มี → เพิ่มเข้า
-        await pb.collection("Favorites").create({
-          PostID: id,
-          Notify: false,
-        });
-      }
-
-      await loadFavorites();
-      window.dispatchEvent(new CustomEvent("favoritesUpdated"));
-    } catch (err) {
-      console.error("❌ toggle favorite error:", err);
-    }
-  };
+  if (loading) {
+    return (
+      <main className="min-h-screen flex items-center justify-center text-gray-600">
+        กำลังโหลดรายการโปรด...
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-[#F8F8F8] py-10 px-4">
@@ -105,8 +90,6 @@ export default function FavoritePage() {
               imgSrc={a.imgSrc}
               status={a.status}
               views={a.views}
-              isFavorite={favorites.includes(a.id)} // ✅ แสดงหัวใจเต็ม
-              onToggleFavorite={handleToggleFavorite} // ✅ ลบ/เพิ่มจากหน้านี้ได้
             />
           ))}
         </div>

@@ -7,7 +7,7 @@ import {
   DropdownMenuContent,
 } from "@/components/ui/dropdown-menu";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
+import pb from "@/lib/pocketbase";
 
 interface SettingDropdownProps {
   user: { studentId: string; name: string };
@@ -16,34 +16,60 @@ interface SettingDropdownProps {
 
 export function SettingDropdown({ user, onLogout }: SettingDropdownProps) {
   const [notify, setNotify] = React.useState(false);
-  const [isOpen, setIsOpen] = React.useState(false); // ✅ state สำหรับเปิด/ปิด
+  const [isOpen, setIsOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    async function loadNotifySetting() {
+      try {
+        const userId = pb.authStore.model?.id;
+        if (!userId) return;
+
+        const record = await pb.collection("users").getOne(userId);
+        setNotify(record.NotifyEnabled ?? false);
+      } catch (err) {
+        console.error("❌ โหลดการตั้งค่าการแจ้งเตือนไม่สำเร็จ:", err);
+      }
+    }
+
+    loadNotifySetting();
+  }, []);
+
+  const handleToggleNotify = async () => {
+    try {
+      const userId = pb.authStore.model?.id;
+      if (!userId) return;
+
+      const newNotify = !notify;
+      await pb.collection("users").update(userId, {
+        NotifyEnabled: newNotify,
+      });
+
+      setNotify(newNotify);
+    } catch (err) {
+      console.error("❌ บันทึกการตั้งค่าการแจ้งเตือนไม่สำเร็จ:", err);
+    }
+  };
 
   return (
     <DropdownMenu onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
-        <button
-          className="flex items-center justify-between w-[246px] h-[45px] border border-[#E35205] 
-                     rounded-[10px] px-6 text-[#E35205] font-semibold hover:bg-[#fff3ed] transition-all"
-        >
+        <button className="flex items-center justify-between w-[246px] h-[45px] border border-[#E35205] rounded-[10px] px-6 text-[#E35205] font-semibold hover:bg-[#fff3ed] transition-all">
           {user.studentId}
-          {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />} {/* ✅ เปลี่ยนทิศลูกศร */}
+          {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
         </button>
       </DropdownMenuTrigger>
 
       <DropdownMenuContent
         align="end"
         sideOffset={6}
-        className="w-[246px] h-[171px] rounded-[5px] border border-[#E35205] bg-white 
-                   shadow-lg p-4 flex flex-col items-center justify-center space-y-4"
+        className="w-[246px] h-[171px] rounded-[5px] border border-[#E35205] bg-white shadow-lg p-4 flex flex-col items-center justify-center space-y-4"
       >
-        {/* ชื่อผู้ใช้ */}
         <p className="font-semibold text-base">{user.name}</p>
 
-        {/* Toggle การแจ้งเตือน */}
         <div className="flex items-center justify-between w-[90%]">
           <span className="font-semibold text-sm">การแจ้งเตือน</span>
           <div
-            onClick={() => setNotify(!notify)}
+            onClick={handleToggleNotify}
             className={`relative w-[70px] h-[27px] rounded-full border cursor-pointer transition-colors ${
               notify ? "bg-[#FF9236]" : "bg-gray-300"
             }`}
@@ -56,7 +82,6 @@ export function SettingDropdown({ user, onLogout }: SettingDropdownProps) {
           </div>
         </div>
 
-        {/* ปุ่มออกจากระบบ */}
         <button
           onClick={onLogout}
           className="text-[#E35205] font-semibold hover:underline mt-2"

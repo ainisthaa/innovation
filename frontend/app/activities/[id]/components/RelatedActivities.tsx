@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { ActivityCard } from "@/app/components/home/ActivityCard";
+import pb from "@/lib/pocketbase";
+import { useAuth } from "@/app/context/AuthContext";
 
 interface RelatedActivitiesProps {
   activities: {
-    id: string; // ✅ เปลี่ยนเป็น string ให้ตรงกับ PocketBase
+    id: string;
     title: string;
     category: string;
     description: string;
@@ -16,31 +18,80 @@ interface RelatedActivitiesProps {
 }
 
 export function RelatedActivities({ activities }: RelatedActivitiesProps) {
-  const [favorites, setFavorites] = useState<string[]>([]); // ✅ เปลี่ยนเป็น string
+  const { user } = useAuth();
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  // ✅ โหลด favorites จาก localStorage
-  const loadFavorites = () => {
+  // Load favorites from PocketBase
+  const loadFavorites = async () => {
+    if (!user) {
+      setFavorites([]);
+      return;
+    }
+
     try {
-      const stored = JSON.parse(localStorage.getItem("favorites") || "[]");
-      if (Array.isArray(stored)) {
-        setFavorites(stored);
-      }
+      const userId = pb.authStore.model?.id;
+      if (!userId) return;
+
+      const list = await pb.collection("Favorites").getList(1, 100, {
+        filter: `UserID="${userId}"`,
+        fields: "PostID",
+        requestKey: null,
+      });
+
+      setFavorites(list.items.map((item: any) => item.PostID));
     } catch (err) {
-      console.error("❌ โหลด favorites ไม่สำเร็จ:", err);
+      console.error("Error loading favorites:", err);
     }
   };
 
-  // ✅ โหลดครั้งแรก + sync กับ event
   useEffect(() => {
     loadFavorites();
-    window.addEventListener("favoritesUpdated", loadFavorites);
-    window.addEventListener("storage", loadFavorites);
+
+    // Listen for updates
+    const handleUpdate = () => loadFavorites();
+    window.addEventListener("favoritesUpdated", handleUpdate);
 
     return () => {
-      window.removeEventListener("favoritesUpdated", loadFavorites);
-      window.removeEventListener("storage", loadFavorites);
+      window.removeEventListener("favoritesUpdated", handleUpdate);
     };
-  }, []);
+  }, [user]);
+
+  // Toggle favorite
+  const toggleFavorite = async (activityId: string) => {
+    if (!user) return;
+    
+    const userId = pb.authStore.model?.id;
+    if (!userId) return;
+
+    setLoading(true);
+    try {
+      const existing = await pb.collection("Favorites").getList(1, 1, {
+        filter: `UserID="${userId}" && PostID="${activityId}"`,
+        requestKey: null,
+      });
+
+      if (existing.items.length > 0) {
+        // Remove from favorites
+        await pb.collection("Favorites").delete(existing.items[0].id);
+        setFavorites(favorites.filter((id) => id !== activityId));
+      } else {
+        // Add to favorites
+        await pb.collection("Favorites").create({
+          UserID: userId,
+          PostID: activityId,
+          Notify: false,
+        });
+        setFavorites([...favorites, activityId]);
+      }
+
+      window.dispatchEvent(new Event("favoritesUpdated"));
+    } catch (err) {
+      console.error("Error toggling favorite:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (!activities || activities.length === 0) {
     return (
@@ -70,15 +121,6 @@ export function RelatedActivities({ activities }: RelatedActivitiesProps) {
             imgSrc={a.imgSrc}
             status={a.status}
             views={a.views}
-            isFavorite={favorites.includes(a.id)} // ✅ ใช้ string match
-            onToggleFavorite={() => {
-              const updated = favorites.includes(a.id)
-                ? favorites.filter((fid) => fid !== a.id)
-                : [...favorites, a.id];
-              localStorage.setItem("favorites", JSON.stringify(updated));
-              setFavorites(updated);
-              window.dispatchEvent(new Event("favoritesUpdated"));
-            }}
           />
         ))}
       </div>

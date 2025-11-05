@@ -5,6 +5,7 @@ import { Pencil, Heart } from "lucide-react";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/app/context/AuthContext";
+import pb from "@/lib/pocketbase";
 
 interface ActivityDetailProps {
   activity: {
@@ -12,7 +13,6 @@ interface ActivityDetailProps {
     title: string;
     category: string;
     description: string;
-    shortDescription?: string;
     organizer: string;
     contact: string;
     place: string;
@@ -30,116 +30,85 @@ export function ActivityDetail({ activity }: ActivityDetailProps) {
   const [isFavorite, setIsFavorite] = useState(false);
   const { user, openLogin } = useAuth();
 
-  // ✅ โหลดสถานะ favorite จาก localStorage
   useEffect(() => {
-    const stored = JSON.parse(localStorage.getItem("favorites") || "[]");
-    if (activity.id && stored.includes(activity.id)) {
-      setIsFavorite(true);
+    if (!activity.id || !user) return;
+
+    const checkFavorite = async () => {
+      try {
+        const fav = await pb.collection("Favorites").getList(1, 1, {
+          filter: `UserID="${pb.authStore.model?.id}" && PostID="${activity.id}"`,
+          requestKey: null,
+        });
+        setIsFavorite(fav.items.length > 0);
+      } catch (err) {
+        console.error("❌ checkFavorite error:", err);
+      }
+    };
+
+    checkFavorite();
+  }, [activity.id, user]);
+
+  const toggleFavorite = async () => {
+    if (!user) return openLogin();
+    const userId = pb.authStore.model?.id;
+
+    console.log("🧭 toggleFavorite", { UserID: userId, PostID: activity.id });
+
+    try {
+      const fav = await pb.collection("Favorites").getList(1, 1, {
+        filter: `UserID="${userId}" && PostID="${activity.id}"`,
+        requestKey: null,
+      });
+
+      if (fav.items.length > 0) {
+        await pb.collection("Favorites").delete(fav.items[0].id);
+        setIsFavorite(false);
+      } else {
+        await pb.collection("Favorites").create({
+          UserID: userId,
+          PostID: activity.id,
+          Notify: false,
+        });
+        setIsFavorite(true);
+      }
+
+      window.dispatchEvent(new CustomEvent("favoritesUpdated"));
+    } catch (err) {
+      console.error("❌ toggleFavorite error:", err);
     }
-  }, [activity.id]);
-
-  // ✅ toggle favorite
-  const toggleFavorite = () => {
-    const stored = JSON.parse(localStorage.getItem("favorites") || "[]");
-
-    const updated = isFavorite
-      ? stored.filter((id: string) => id !== activity.id)
-      : [...stored, activity.id];
-
-    localStorage.setItem("favorites", JSON.stringify(updated));
-    setIsFavorite(!isFavorite);
-    window.dispatchEvent(new Event("storage"));
   };
 
   return (
     <section className="max-w-5xl mx-auto px-4 py-10 text-gray-800">
-      {/* 🔸 ภาพหลัก */}
       <Image
         src={activity.imgSrc}
         alt={activity.title}
         width={1000}
         height={400}
         className="rounded-lg shadow-md w-full object-cover"
+        priority
       />
 
-      {/* 🔸 สถานะกิจกรรม */}
       <div className="flex justify-center mt-5">
         <span
           className={`text-sm font-semibold px-4 py-1 rounded-md ${
-            activity.isOpen ? "bg-green-400 text-black" : "bg-red-400 text-black"
-          }`}
+            activity.isOpen ? "bg-green-400" : "bg-red-400"
+          } text-black`}
         >
           {activity.isOpen ? "เปิดรับสมัครแล้ว" : "ปิดรับสมัครแล้ว"}
         </span>
       </div>
 
-      {/* 🔸 ชื่อกิจกรรม */}
       <h1 className="text-center text-2xl font-bold mt-5">{activity.title}</h1>
 
-      {/* 🔸 รายละเอียดสั้น */}
-      {activity.shortDescription && (
-        <p className="text-center text-gray-600 mt-2">
-          {activity.shortDescription}
-        </p>
-      )}
-
-      {/* 🔸 ข้อมูลสรุปกิจกรรม */}
-      <div className="mt-8 space-y-3 text-[16px]">
-        <p>
-          <strong>ประเภทกิจกรรม:</strong> {activity.category}
-        </p>
-        <p>
-          <strong>สถานที่จัดกิจกรรม:</strong> {activity.place}
-        </p>
-        <p>
-          <strong>ช่วงเวลากิจกรรม:</strong> {activity.period}
-        </p>
-        <p>
-          <strong>คุณสมบัติผู้เข้าร่วม:</strong> {activity.requirement}
-        </p>
+      <div className="mt-10 space-y-3 text-[16px]">
+        <p><strong>ประเภทกิจกรรม:</strong> {activity.category}</p>
+        <p><strong>สถานที่จัดกิจกรรม:</strong> {activity.place}</p>
+        <p><strong>ช่วงเวลากิจกรรม:</strong> {activity.period}</p>
+        <p><strong>คุณสมบัติผู้เข้าร่วม:</strong> {activity.requirement}</p>
       </div>
 
-      {/* 🔸 กล่องข้อมูลสมัคร */}
-      <div className="flex flex-wrap justify-left gap-6 mt-10">
-        <div className="bg-[#FF9236] text-black rounded-[10px] px-6 py-3 text-center w-[230px]">
-          <p className="font-semibold">เปิดรับสมัคร</p>
-          <p className="text-sm">{activity.startDate}</p>
-        </div>
-
-        <div className="bg-[#FF9236] text-black rounded-[10px] px-6 py-3 text-center w-[230px]">
-          <p className="font-semibold">ปิดรับสมัคร</p>
-          <p className="text-sm">{activity.endDate}</p>
-        </div>
-
-        <div className="bg-[#FF9236] text-black rounded-[10px] px-6 py-3 text-center w-[230px]">
-          <p className="font-semibold">จำนวนที่รับ</p>
-          <p className="text-sm">{activity.maxParticipants}</p>
-        </div>
-      </div>
-
-      {/* 🔸 รายละเอียดกิจกรรม */}
-      <div className="mt-10">
-        <h2 className="font-bold mb-2 text-lg">รายละเอียดกิจกรรม</h2>
-        <p className="text-justify leading-relaxed text-gray-800 whitespace-pre-line">
-          {activity.description}
-        </p>
-      </div>
-
-      {/* 🔸 ข้อมูลติดต่อและหน่วยงาน */}
-      <div className="mt-8 space-y-6">
-        <div>
-          <h3 className="font-bold text-lg">จัดกิจกรรมโดย</h3>
-          <p>{activity.organizer}</p>
-        </div>
-        <div>
-          <h3 className="font-bold text-lg">ช่องทางการติดต่อ</h3>
-          <p>{activity.contact}</p>
-        </div>
-      </div>
-
-      {/* 🔸 ปุ่ม */}
       <div className="flex justify-center gap-10 mt-10 flex-wrap">
-        {/* ปุ่มลงทะเบียน */}
         <button
           onClick={() => {
             if (!user) return openLogin();
@@ -152,7 +121,6 @@ export function ActivityDetail({ activity }: ActivityDetailProps) {
           <Pencil size={38} strokeWidth={2.3} className="text-black" />
         </button>
 
-        {/* ปุ่มรายการโปรด */}
         <motion.button
           onClick={toggleFavorite}
           whileTap={{ scale: 1.15 }}

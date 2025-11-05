@@ -1,27 +1,43 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import pb from "@/lib/pocketbase";
 import { ActivityCard } from "./components/home/ActivityCard";
 import { PaginationSection } from "./components/home/PaginationSection";
 import SearchSection from "./components/home/SearchSection";
 
-export default function HomePage() {
+function HomePageContent() {
+  const searchParams = useSearchParams();
   const [activities, setActivities] = useState<any[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
-  const [favorites, setFavorites] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   const itemsPerPage = 10;
 
-  // ✅ โหลดข้อมูลจริงจาก PocketBase
   useEffect(() => {
     const controller = new AbortController();
 
     async function fetchActivities() {
       try {
-        const list = await pb.collection("Posts").getList(1, 50, {
+        setLoading(true);
+        
+        const q = searchParams.get("q") || "";
+        const faculty = searchParams.get("faculty") || "";
+        const department = searchParams.get("department") || "";
+        const type = searchParams.get("type") || "";
+
+        let filters = [];
+        if (q) filters.push(`(Topic ~ "${q}" || ViewDescription ~ "${q}" || AllDescription ~ "${q}")`);
+        if (faculty) filters.push(`Faculty = "${faculty}"`);
+        if (department) filters.push(`Department = "${department}"`);
+        if (type) filters.push(`Type = "${type}"`);
+
+        const filterString = filters.length > 0 ? filters.join(" && ") : "";
+
+        const list = await pb.collection("Posts").getList(1, 100, {
           sort: "-created",
+          filter: filterString,
           signal: controller.signal,
         });
 
@@ -30,10 +46,7 @@ export default function HomePage() {
             id: item.id,
             title: item.Topic || "ไม่มีชื่อกิจกรรม",
             category: item.Type || "ไม่ระบุประเภท",
-            description:
-              item.ViewDescription ||
-              item.AllDescription ||
-              "ไม่มีรายละเอียดกิจกรรม",
+            description: item.ViewDescription || item.AllDescription || "ไม่มีรายละเอียดกิจกรรม",
             place: item.Place || "ไม่ระบุสถานที่",
             period: item.Period || "ไม่ระบุช่วงเวลา",
             requirement: item.Requirement || "ไม่ระบุคุณสมบัติ",
@@ -50,6 +63,8 @@ export default function HomePage() {
                 : "/images/activity.png",
           }))
         );
+        
+        setCurrentPage(1);
       } catch (err: any) {
         if (err.name !== "AbortError") {
           console.error("❌ โหลดข้อมูลกิจกรรมไม่สำเร็จ:", err);
@@ -61,33 +76,13 @@ export default function HomePage() {
 
     fetchActivities();
     return () => controller.abort();
-  }, []);
+  }, [searchParams]);
 
-  // ✅ โหลด favorite จาก localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem("favorites");
-    if (saved) setFavorites(JSON.parse(saved));
-  }, []);
-
-  // ✅ บันทึก favorite เมื่อเปลี่ยน
-  useEffect(() => {
-    localStorage.setItem("favorites", JSON.stringify(favorites));
-  }, [favorites]);
-
-  // ✅ toggle favorite
-  const handleToggleFavorite = (id: string) => {
-    setFavorites((prev) =>
-      prev.includes(id) ? prev.filter((fid) => fid !== id) : [...prev, id]
-    );
-  };
-
-  // ✅ pagination
   const indexOfLast = currentPage * itemsPerPage;
   const indexOfFirst = indexOfLast - itemsPerPage;
   const currentActivities = activities.slice(indexOfFirst, indexOfLast);
   const totalPages = Math.ceil(activities.length / itemsPerPage);
 
-  // ✅ loading state
   if (loading) {
     return (
       <main className="min-h-screen flex items-center justify-center text-gray-600">
@@ -98,19 +93,17 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen bg-[#F8F8F8] pb-20">
-      {/* 🔍 แถบค้นหา */}
       <div className="flex justify-center mt-[55px]">
         <SearchSection />
       </div>
 
-      {/* 🔸 รายการกิจกรรม */}
       <section className="max-w-6xl mx-auto mt-16 px-4">
         <h2 className="text-2xl font-bold text-center mb-8 text-black">
           รายการกิจกรรม
         </h2>
 
         {activities.length === 0 ? (
-          <p className="text-center text-gray-500">ยังไม่มีกิจกรรมในระบบ</p>
+          <p className="text-center text-gray-500">ไม่พบกิจกรรมที่ค้นหา</p>
         ) : (
           <div className="flex flex-col gap-6">
             {currentActivities.map((activity) => (
@@ -123,14 +116,11 @@ export default function HomePage() {
                 imgSrc={activity.imgSrc}
                 status={activity.isOpen ? "open" : "closed"}
                 views={activity.views}
-                isFavorite={favorites.includes(activity.id)}
-                onToggleFavorite={handleToggleFavorite}
               />
             ))}
           </div>
         )}
 
-        {/* 🔸 pagination */}
         {activities.length > itemsPerPage && (
           <div className="mt-10">
             <PaginationSection
@@ -144,3 +134,12 @@ export default function HomePage() {
     </main>
   );
 }
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">กำลังโหลด...</div>}>
+      <HomePageContent />
+    </Suspense>
+  );
+}
+
