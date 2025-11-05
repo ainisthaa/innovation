@@ -8,12 +8,16 @@ import { useAuth } from "@/app/context/AuthContext";
 
 interface ActivityDetailProps {
   activity: {
-    id?: number;
+    id?: string;
     title: string;
     category: string;
     description: string;
+    shortDescription?: string;
     organizer: string;
     contact: string;
+    place: string;
+    period: string;
+    requirement: string;
     startDate: string;
     endDate: string;
     maxParticipants: number;
@@ -24,33 +28,32 @@ interface ActivityDetailProps {
 
 export function ActivityDetail({ activity }: ActivityDetailProps) {
   const [isFavorite, setIsFavorite] = useState(false);
+  const { user, openLogin } = useAuth();
 
-  // โหลดสถานะ favorite จาก localStorage
+  // ✅ โหลดสถานะ favorite จาก localStorage
   useEffect(() => {
     const stored = JSON.parse(localStorage.getItem("favorites") || "[]");
     if (activity.id && stored.includes(activity.id)) {
       setIsFavorite(true);
     }
   }, [activity.id]);
-  const { user, openLogin } = useAuth();
 
+  // ✅ toggle favorite
   const toggleFavorite = () => {
-    
     const stored = JSON.parse(localStorage.getItem("favorites") || "[]");
 
     const updated = isFavorite
-      ? stored.filter((id: number) => id !== activity.id)
+      ? stored.filter((id: string) => id !== activity.id)
       : [...stored, activity.id];
 
     localStorage.setItem("favorites", JSON.stringify(updated));
     setIsFavorite(!isFavorite);
-
-    // แจ้งให้หน้าอื่นอัปเดตทันที
     window.dispatchEvent(new Event("storage"));
   };
 
   return (
-    <section className="max-w-4xl mx-auto px-4 py-10">
+    <section className="max-w-5xl mx-auto px-4 py-10 text-gray-800">
+      {/* 🔸 ภาพหลัก */}
       <Image
         src={activity.imgSrc}
         alt={activity.title}
@@ -59,34 +62,45 @@ export function ActivityDetail({ activity }: ActivityDetailProps) {
         className="rounded-lg shadow-md w-full object-cover"
       />
 
-      <div className="flex justify-center mt-4">
+      {/* 🔸 สถานะกิจกรรม */}
+      <div className="flex justify-center mt-5">
         <span
-          className={`text-sm font-semibold px-3 py-1 rounded-md ${
-            activity.isOpen ? "bg-green-500 text-black" : "bg-red-500 text-black"
+          className={`text-sm font-semibold px-4 py-1 rounded-md ${
+            activity.isOpen ? "bg-green-400 text-black" : "bg-red-400 text-black"
           }`}
         >
           {activity.isOpen ? "เปิดรับสมัครแล้ว" : "ปิดรับสมัครแล้ว"}
         </span>
       </div>
 
-      <h1 className="text-center text-xl font-bold mt-3">{activity.title}</h1>
+      {/* 🔸 ชื่อกิจกรรม */}
+      <h1 className="text-center text-2xl font-bold mt-5">{activity.title}</h1>
 
-      <div className="mt-6 space-y-4">
+      {/* 🔸 รายละเอียดสั้น */}
+      {activity.shortDescription && (
+        <p className="text-center text-gray-600 mt-2">
+          {activity.shortDescription}
+        </p>
+      )}
+
+      {/* 🔸 ข้อมูลสรุปกิจกรรม */}
+      <div className="mt-8 space-y-3 text-[16px]">
         <p>
           <strong>ประเภทกิจกรรม:</strong> {activity.category}
         </p>
         <p>
-          <strong>สถานที่จัดกิจกรรม:</strong> {activity.organizer}
+          <strong>สถานที่จัดกิจกรรม:</strong> {activity.place}
         </p>
         <p>
-          <strong>ช่วงเวลากิจกรรม:</strong> {activity.startDate}
+          <strong>ช่วงเวลากิจกรรม:</strong> {activity.period}
         </p>
         <p>
-          <strong>คุณสมบัติ:</strong> Lorem ipsum
+          <strong>คุณสมบัติผู้เข้าร่วม:</strong> {activity.requirement}
         </p>
       </div>
 
-      <div className="flex justify-left gap-6 mt-8 flex-wrap">
+      {/* 🔸 กล่องข้อมูลสมัคร */}
+      <div className="flex flex-wrap justify-left gap-6 mt-10">
         <div className="bg-[#FF9236] text-black rounded-[10px] px-6 py-3 text-center w-[230px]">
           <p className="font-semibold">เปิดรับสมัคร</p>
           <p className="text-sm">{activity.startDate}</p>
@@ -103,13 +117,15 @@ export function ActivityDetail({ activity }: ActivityDetailProps) {
         </div>
       </div>
 
+      {/* 🔸 รายละเอียดกิจกรรม */}
       <div className="mt-10">
-        <h2 className="font-bold mb-2">รายละเอียดกิจกรรม</h2>
-        <p className="text-justify leading-relaxed text-gray-800">
-          {activity.description.repeat(2)}
+        <h2 className="font-bold mb-2 text-lg">รายละเอียดกิจกรรม</h2>
+        <p className="text-justify leading-relaxed text-gray-800 whitespace-pre-line">
+          {activity.description}
         </p>
       </div>
 
+      {/* 🔸 ข้อมูลติดต่อและหน่วยงาน */}
       <div className="mt-8 space-y-6">
         <div>
           <h3 className="font-bold text-lg">จัดกิจกรรมโดย</h3>
@@ -125,6 +141,10 @@ export function ActivityDetail({ activity }: ActivityDetailProps) {
       <div className="flex justify-center gap-10 mt-10 flex-wrap">
         {/* ปุ่มลงทะเบียน */}
         <button
+          onClick={() => {
+            if (!user) return openLogin();
+            alert("✅ ไปหน้าลงทะเบียนได้เลย (ต่อเชื่อมภายหลัง)");
+          }}
           className="w-[335px] h-[130px] bg-[#F7F7F7] border border-black/25 rounded-[20px] 
                      flex flex-col items-center justify-center hover:shadow-md transition-all"
         >

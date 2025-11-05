@@ -2,38 +2,55 @@
 
 import { useEffect, useState } from "react";
 import { ActivityCard } from "@/app/components/home/ActivityCard";
+import pb from "@/lib/pocketbase";
 
 export default function FavoritePage() {
-  const [favorites, setFavorites] = useState<number[]>([]);
+  const [favorites, setFavorites] = useState<string[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
 
-  // 🧩 mock ข้อมูลกิจกรรมทั้งหมด (ในระบบจริงจะมาจาก API)
-  const allActivities = Array.from({ length: 20 }, (_, i) => ({
-    id: i + 1,
-    title: `กิจกรรมที่ ${i + 1}`,
-    category: i % 2 === 0 ? "ค่ายคอมพิวเตอร์" : "กิจกรรมจิตอาสา",
-    description:
-      "รายละเอียดกิจกรรม Lorem ipsum dolor sit amet consectetur adipiscing elit.",
-    imgSrc: "/images/activity.png",
-    status: i % 3 === 0 ? "open" : i % 2 === 0 ? "open" : "open",
-    views: 100 + i * 5,
-  }));
-
-  // ✅ โหลด favorites จาก localStorage
-  const loadFavorites = () => {
+  // ✅ โหลด favorites จาก PocketBase
+  const loadFavorites = async () => {
     try {
-      const stored = JSON.parse(localStorage.getItem("favorites") || "[]");
-      setFavorites(stored);
-      setActivities(allActivities.filter((a) => stored.includes(a.id)));
+      // ดึงรายการ favorites พร้อมขยายข้อมูล PostID
+      const list = await pb.collection("Favorites").getList(1, 100, {
+        sort: "-created",
+        expand: "PostID",
+      });
+
+      // ✅ แปลงข้อมูลให้อยู่ในรูปแบบเดียวกับ ActivityCard
+      const posts = list.items
+        .map((fav: any) => {
+          const post = fav.expand?.PostID;
+          if (!post) return null;
+          return {
+            id: post.id,
+            title: post.Topic || "ไม่มีชื่อกิจกรรม",
+            category: post.Type || "ไม่ระบุประเภท",
+            description:
+              post.ViewDescription || post.AllDescription || "ไม่มีรายละเอียด",
+            imgSrc:
+              post.Poster && post.Poster !== "N/A"
+                ? `${pb.baseUrl}/api/files/${post.collectionId}/${post.id}/${post.Poster}`
+                : "/images/activity.png",
+            status: post.Verify ? "open" : "closed",
+            views: post.ViewCount ?? 0,
+          };
+        })
+        .filter((p) => p !== null);
+
+      setFavorites(list.items.map((f: any) => f.PostID));
+      setActivities(posts);
     } catch (err) {
-      console.error("Error reading favorites:", err);
+      console.error("❌ โหลดข้อมูล favorites ไม่สำเร็จ:", err);
+      setFavorites([]);
+      setActivities([]);
     }
   };
 
   useEffect(() => {
     loadFavorites();
 
-    // ✅ ฟัง event จากทุกหน้า (ทั้งในแท็บเดียวและข้ามแท็บ)
+    // ✅ อัปเดต favorites แบบเรียลไทม์จาก event
     const updateListener = () => loadFavorites();
     window.addEventListener("favoritesUpdated", updateListener);
     window.addEventListener("storage", updateListener);
@@ -45,18 +62,29 @@ export default function FavoritePage() {
   }, []);
 
   // ❤️ เมื่อกดหัวใจใน ActivityCard
-  const handleToggleFavorite = (id: number) => {
-    const stored = JSON.parse(localStorage.getItem("favorites") || "[]");
-    const updated = stored.includes(id)
-      ? stored.filter((fid: number) => fid !== id)
-      : [...stored, id];
+  const handleToggleFavorite = async (id: string) => {
+    try {
+      // ตรวจว่ามี favorite อยู่แล้วหรือไม่
+      const favList = await pb.collection("Favorites").getList(1, 100, {
+        filter: `PostID="${id}"`,
+      });
 
-    localStorage.setItem("favorites", JSON.stringify(updated));
-    setFavorites(updated);
-    setActivities(allActivities.filter((a) => updated.includes(a.id)));
+      if (favList.items.length > 0) {
+        // ถ้ามีอยู่แล้ว → ลบออก
+        await pb.collection("Favorites").delete(favList.items[0].id);
+      } else {
+        // ถ้ายังไม่มี → เพิ่มเข้า
+        await pb.collection("Favorites").create({
+          PostID: id,
+          Notify: false,
+        });
+      }
 
-    // ✅ แจ้งให้ทุกหน้าทราบทันที
-    window.dispatchEvent(new CustomEvent("favoritesUpdated"));
+      await loadFavorites();
+      window.dispatchEvent(new CustomEvent("favoritesUpdated"));
+    } catch (err) {
+      console.error("❌ toggle favorite error:", err);
+    }
   };
 
   return (
@@ -83,9 +111,7 @@ export default function FavoritePage() {
           ))}
         </div>
       ) : (
-        <p className="text-center text-gray-500 mt-10">
-          ยังไม่มีรายการโปรด
-        </p>
+        <p className="text-center text-gray-500 mt-10">ยังไม่มีรายการโปรด</p>
       )}
     </main>
   );
