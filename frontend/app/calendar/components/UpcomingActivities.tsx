@@ -1,24 +1,52 @@
+// app/calendar/components/UpcomingActivities.tsx
 "use client";
 
 import { ActivityCard } from "@/app/components/home/ActivityCard";
 import { useEffect, useState } from "react";
-import pb from "@/lib/pocketbase";
+import pb, { Post } from "@/lib/pocketbase";
+
+interface ActivityData {
+  id: string;
+  title: string;
+  category: string;
+  description: string;
+  imgSrc: string;
+  status: "upcoming" | "open" | "closed";
+  views: number;
+}
 
 export function UpcomingActivities() {
-  const [activities, setActivities] = useState<any[]>([]);
+  const [activities, setActivities] = useState<ActivityData[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchUpcoming() {
       try {
         const today = new Date().toISOString().split("T")[0];
-        const list = await pb.collection("Posts").getList(1, 8, {
+        
+        // ✅ ดึงกิจกรรมที่กำลังจะมาถึง (OpenRegister >= วันนี้)
+        const list = await pb.collection("Posts").getList<Post>(1, 8, {
           sort: "OpenRegister",
           filter: `Verify = true && OpenRegister >= "${today}"`,
+          requestKey: `upcoming_${Date.now()}`,
         });
 
-        setActivities(
-          list.items.map((item: any) => ({
+        const mappedActivities: ActivityData[] = list.items.map((item) => {
+          let status: "upcoming" | "open" | "closed" = "upcoming";
+          
+          const now = new Date();
+          const openDate = item.OpenRegister ? new Date(item.OpenRegister) : null;
+          const closeDate = item.CloseRegister ? new Date(item.CloseRegister) : null;
+          
+          if (openDate && closeDate) {
+            if (now >= openDate && now <= closeDate) {
+              status = "open";
+            } else if (now > closeDate) {
+              status = "closed";
+            }
+          }
+
+          return {
             id: item.id,
             title: item.Topic || "ไม่มีชื่อกิจกรรม",
             category: item.Type || "ไม่ระบุประเภท",
@@ -27,10 +55,12 @@ export function UpcomingActivities() {
               item.Poster && item.Poster !== "N/A"
                 ? `${pb.baseUrl}/api/files/${item.collectionId}/${item.id}/${item.Poster}`
                 : "/images/activity.png",
-            status: "upcoming" as const,
+            status,
             views: item.ViewCount ?? 0,
-          }))
-        );
+          };
+        });
+
+        setActivities(mappedActivities);
       } catch (err) {
         console.error("❌ โหลดกิจกรรมที่กำลังจะมาถึงไม่สำเร็จ:", err);
       } finally {
@@ -77,4 +107,3 @@ export function UpcomingActivities() {
     </section>
   );
 }
-

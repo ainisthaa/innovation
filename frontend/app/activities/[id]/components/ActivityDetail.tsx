@@ -1,3 +1,4 @@
+// app/activities/[id]/components/ActivityDetail.tsx
 "use client";
 
 import Image from "next/image";
@@ -5,7 +6,7 @@ import { Pencil, Heart } from "lucide-react";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/app/context/AuthContext";
-import pb from "@/lib/pocketbase";
+import pb, { Favorite } from "@/lib/pocketbase";
 
 interface ActivityDetailProps {
   activity: {
@@ -23,6 +24,7 @@ interface ActivityDetailProps {
     maxParticipants: number;
     isOpen: boolean;
     imgSrc: string;
+    registerLink?: string;
   };
 }
 
@@ -35,9 +37,9 @@ export function ActivityDetail({ activity }: ActivityDetailProps) {
 
     const checkFavorite = async () => {
       try {
-        const fav = await pb.collection("Favorites").getList(1, 1, {
+        const fav = await pb.collection("Favorites").getList<Favorite>(1, 1, {
           filter: `UserID="${pb.authStore.model?.id}" && PostID="${activity.id}"`,
-          requestKey: null,
+          requestKey: `detail_fav_${activity.id}_${Date.now()}`,
         });
         setIsFavorite(fav.items.length > 0);
       } catch (err) {
@@ -49,15 +51,18 @@ export function ActivityDetail({ activity }: ActivityDetailProps) {
   }, [activity.id, user]);
 
   const toggleFavorite = async () => {
-    if (!user) return openLogin();
+    if (!user) {
+      openLogin();
+      return;
+    }
+    
     const userId = pb.authStore.model?.id;
-
-    console.log("🧭 toggleFavorite", { UserID: userId, PostID: activity.id });
+    if (!userId) return;
 
     try {
-      const fav = await pb.collection("Favorites").getList(1, 1, {
+      const fav = await pb.collection("Favorites").getList<Favorite>(1, 1, {
         filter: `UserID="${userId}" && PostID="${activity.id}"`,
-        requestKey: null,
+        requestKey: `toggle_detail_fav_${activity.id}_${Date.now()}`,
       });
 
       if (fav.items.length > 0) {
@@ -75,6 +80,20 @@ export function ActivityDetail({ activity }: ActivityDetailProps) {
       window.dispatchEvent(new CustomEvent("favoritesUpdated"));
     } catch (err) {
       console.error("❌ toggleFavorite error:", err);
+    }
+  };
+
+  const handleRegister = () => {
+    if (!user) {
+      openLogin();
+      return;
+    }
+
+    if (activity.registerLink) {
+      // Open registration link
+      window.open(activity.registerLink, "_blank");
+    } else {
+      alert("✅ ไปหน้าลงทะเบียนได้เลย (ต่อเชื่อมภายหลัง)");
     }
   };
 
@@ -106,14 +125,16 @@ export function ActivityDetail({ activity }: ActivityDetailProps) {
         <p><strong>สถานที่จัดกิจกรรม:</strong> {activity.place}</p>
         <p><strong>ช่วงเวลากิจกรรม:</strong> {activity.period}</p>
         <p><strong>คุณสมบัติผู้เข้าร่วม:</strong> {activity.requirement}</p>
+        <p><strong>หน่วยงานจัด:</strong> {activity.organizer}</p>
+        <p><strong>ช่องทางติดต่อ:</strong> {activity.contact}</p>
+        <p><strong>วันเปิดรับสมัคร:</strong> {new Date(activity.startDate).toLocaleDateString('th-TH')}</p>
+        <p><strong>วันปิดรับสมัคร:</strong> {new Date(activity.endDate).toLocaleDateString('th-TH')}</p>
+        <p><strong>จำนวนรับสมัคร:</strong> {activity.maxParticipants > 0 ? activity.maxParticipants : "ไม่จำกัด"}</p>
       </div>
 
       <div className="flex justify-center gap-10 mt-10 flex-wrap">
         <button
-          onClick={() => {
-            if (!user) return openLogin();
-            alert("✅ ไปหน้าลงทะเบียนได้เลย (ต่อเชื่อมภายหลัง)");
-          }}
+          onClick={handleRegister}
           className="w-[335px] h-[130px] bg-[#F7F7F7] border border-black/25 rounded-[20px] 
                      flex flex-col items-center justify-center hover:shadow-md transition-all"
         >

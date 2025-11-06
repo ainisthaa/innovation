@@ -1,3 +1,4 @@
+// app/activities/[id]/components/RelatedActivities.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -21,6 +22,9 @@ export function RelatedActivities({ activities }: RelatedActivitiesProps) {
   const { user } = useAuth();
   const [favorites, setFavorites] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // ✅ กรองเฉพาะกิจกรรมที่ status = "open"
+  const openActivities = activities.filter((a) => a.status === "open");
 
   // Load favorites from PocketBase
   const loadFavorites = async () => {
@@ -93,15 +97,9 @@ export function RelatedActivities({ activities }: RelatedActivitiesProps) {
     }
   };
 
-  if (!activities || activities.length === 0) {
-    return (
-      <section className="max-w-6xl mx-auto px-4 pb-20">
-        <h2 className="text-2xl font-bold mb-8 text-center text-black/50">
-          กิจกรรมอื่นๆ
-        </h2>
-        <p className="text-center text-gray-500">ยังไม่มีกิจกรรมอื่นในระบบ</p>
-      </section>
-    );
+  // ✅ ถ้าไม่มีกิจกรรมที่เป็น open เลย ก็ไม่แสดงอะไร
+  if (!openActivities || openActivities.length === 0) {
+    return null; // หรือจะแสดงข้อความว่า "ไม่มีกิจกรรมที่เปิดรับสมัครในขณะนี้" ก็ได้
   }
 
   return (
@@ -111,7 +109,7 @@ export function RelatedActivities({ activities }: RelatedActivitiesProps) {
       </h2>
 
       <div className="flex flex-col gap-6">
-        {activities.map((a) => (
+        {openActivities.map((a) => (
           <ActivityCard
             key={a.id}
             id={a.id}

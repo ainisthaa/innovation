@@ -1,15 +1,26 @@
+// app/page.tsx
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import pb from "@/lib/pocketbase";
+import pb, { Post, getImageUrl } from "@/lib/pocketbase";
 import { ActivityCard } from "./components/home/ActivityCard";
 import { PaginationSection } from "./components/home/PaginationSection";
 import SearchSection from "./components/home/SearchSection";
 
+interface ActivityData {
+  id: string;
+  title: string;
+  category: string;
+  description: string;
+  imgSrc: string;
+  status: "upcoming" | "open" | "closed";
+  views: number;
+}
+
 function HomePageContent() {
   const searchParams = useSearchParams();
-  const [activities, setActivities] = useState<any[]>([]);
+  const [activities, setActivities] = useState<ActivityData[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
 
@@ -28,42 +39,52 @@ function HomePageContent() {
         const type = searchParams.get("type") || "";
 
         let filters = [];
-        if (q) filters.push(`(Topic ~ "${q}" || ViewDescription ~ "${q}" || AllDescription ~ "${q}")`);
-        if (faculty) filters.push(`Faculty = "${faculty}"`);
-        if (department) filters.push(`Department = "${department}"`);
+        
+        // ✅ Search in Topic, ViewDescription, AllDescription
+        if (q) {
+          filters.push(`(Topic ~ "${q}" || ViewDescription ~ "${q}" || AllDescription ~ "${q}")`);
+        }
+        
+        // Note: Faculty/Department ยังไม่มีใน Backend
+        // เมื่อเพิ่มใน PocketBase แล้ว uncomment บรรทัดด้านล่าง
+        // if (faculty) filters.push(`Faculty = "${faculty}"`);
+        // if (department) filters.push(`Department = "${department}"`);
+        
         if (type) filters.push(`Type = "${type}"`);
 
         const filterString = filters.length > 0 ? filters.join(" && ") : "";
 
-        const list = await pb.collection("Posts").getList(1, 100, {
+        // ✅ Type-safe query
+        const list = await pb.collection("Posts").getList<Post>(1, 100, {
           sort: "-created",
           filter: filterString,
-          signal: controller.signal,
+          requestKey: `posts_${Date.now()}`,
         });
 
-        setActivities(
-          list.items.map((item: any) => ({
+        // ✅ Map to ActivityData - ใช้ Verify อย่างเดียว (ไม่สนใจวันที่)
+        const mappedActivities: ActivityData[] = list.items.map((item) => {
+          // Verify = true → open, Verify = false → closed
+          const status: "upcoming" | "open" | "closed" = item.Verify ? "open" : "closed";
+          
+          return {
             id: item.id,
             title: item.Topic || "ไม่มีชื่อกิจกรรม",
             category: item.Type || "ไม่ระบุประเภท",
             description: item.ViewDescription || item.AllDescription || "ไม่มีรายละเอียดกิจกรรม",
-            place: item.Place || "ไม่ระบุสถานที่",
-            period: item.Period || "ไม่ระบุช่วงเวลา",
-            requirement: item.Requirement || "ไม่ระบุคุณสมบัติ",
-            organizer: item.Organized || "ไม่ระบุหน่วยงาน",
-            contact: item.Contact || "ไม่ระบุช่องทางติดต่อ",
+            imgSrc: getImageUrl(item, item.Poster),
+            status: status,
             views: item.ViewCount ?? 0,
-            isOpen: item.Verify ?? false,
-            openDate: item.OpenRegister || "ไม่ระบุวันที่เปิดรับสมัคร",
-            closeDate: item.CloseRegister || "ไม่ระบุวันที่ปิดรับสมัคร",
-            maxParticipants: item.MaxRegister || 0,
-            imgSrc:
-              item.Poster && item.Poster !== "N/A"
-                ? `${pb.baseUrl}/api/files/${item.collectionId}/${item.id}/${item.Poster}`
-                : "/images/activity.png",
-          }))
-        );
-        
+          };
+        });
+
+        // ✅ เรียงให้กิจกรรมที่เปิดรับสมัครอยู่ขึ้นด้านบนสุด
+        const sortedActivities = mappedActivities.sort((a, b) => {
+          if (a.status === "open" && b.status !== "open") return -1;
+          if (a.status !== "open" && b.status === "open") return 1;
+          return 0;
+        });
+
+        setActivities(sortedActivities);
         setCurrentPage(1);
       } catch (err: any) {
         if (err.name !== "AbortError") {
@@ -114,7 +135,7 @@ function HomePageContent() {
                 category={activity.category}
                 description={activity.description}
                 imgSrc={activity.imgSrc}
-                status={activity.isOpen ? "open" : "closed"}
+                status={activity.status}
                 views={activity.views}
               />
             ))}
@@ -137,9 +158,12 @@ function HomePageContent() {
 
 export default function HomePage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">กำลังโหลด...</div>}>
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        กำลังโหลด...
+      </div>
+    }>
       <HomePageContent />
     </Suspense>
   );
 }
-

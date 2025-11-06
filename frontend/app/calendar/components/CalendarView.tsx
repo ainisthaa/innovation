@@ -1,3 +1,4 @@
+// app/calendar/components/CalendarView.tsx
 "use client";
 
 import { useRouter } from "next/navigation";
@@ -7,7 +8,7 @@ import moment from "moment";
 import "moment/locale/th";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import "./calendar-custom.css";
-import pb from "@/lib/pocketbase";
+import pb, { Post } from "@/lib/pocketbase";
 
 moment.locale("th");
 const localizer = momentLocalizer(moment);
@@ -60,12 +61,14 @@ export function CalendarView() {
   useEffect(() => {
     async function fetchActivities() {
       try {
-        const list = await pb.collection("Posts").getList(1, 100, {
+        // ✅ ดึงเฉพาะกิจกรรมที่ Verify = true
+        const list = await pb.collection("Posts").getList<Post>(1, 100, {
           sort: "-created",
           filter: "Verify = true",
+          requestKey: `calendar_${Date.now()}`,
         });
 
-        const acts = list.items.map((item: any) => ({
+        const acts: Activity[] = list.items.map((item) => ({
           id: item.id,
           title: item.Topic || "ไม่มีชื่อกิจกรรม",
           startDate: item.OpenRegister || new Date().toISOString(),

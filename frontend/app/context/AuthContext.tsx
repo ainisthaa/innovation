@@ -1,4 +1,5 @@
-"use client"; // ✅ client component ที่ใช้ React state
+// app/context/AuthContext.tsx
+"use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import pb from "@/lib/pocketbase";
@@ -23,13 +24,38 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoginOpen, setLoginOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   // ✅ โหลดสถานะล็อกอินจาก PocketBase authStore
   useEffect(() => {
+    // Check if already logged in
     if (pb.authStore.isValid && pb.authStore.model) {
       const u = pb.authStore.model;
-      setUser({ id: u.id, name: u.name, email: u.email });
+      setUser({ 
+        id: u.id, 
+        name: u.name || u.email || "User", 
+        email: u.email 
+      });
     }
+    
+    setLoading(false);
+
+    // Subscribe to auth changes
+    const unsubscribe = pb.authStore.onChange((token, model) => {
+      if (model) {
+        setUser({
+          id: model.id,
+          name: model.name || model.email || "User",
+          email: model.email,
+        });
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   // ✅ ล็อกอินผ่าน PocketBase SDK
@@ -40,16 +66,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .authWithPassword(email, password);
 
       const record = authData.record;
-      setUser({ id: record.id, name: record.name, email: record.email });
+      setUser({ 
+        id: record.id, 
+        name: record.name || record.email || "User", 
+        email: record.email 
+      });
       setLoginOpen(false);
 
       console.log("✅ Login success");
-      console.log("pb.authStore.isValid:", pb.authStore.isValid);
-      console.log("pb.authStore.token:", pb.authStore.token);
-      console.log("pb.authStore.model.id:", pb.authStore.model.id);
     } catch (err: any) {
       console.error("❌ Login failed:", err);
-      throw err;
+      throw new Error(err?.message || "อีเมลหรือรหัสผ่านไม่ถูกต้อง");
     }
   };
 
@@ -61,6 +88,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const openLogin = () => setLoginOpen(true);
+
+  if (loading) {
+    return null; // or a loading spinner
+  }
 
   return (
     <AuthContext.Provider

@@ -1,19 +1,31 @@
+// app/favorite/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
 import { ActivityCard } from "@/app/components/home/ActivityCard";
-import pb from "@/lib/pocketbase";
+import pb, { Favorite, Post } from "@/lib/pocketbase";
+import { useAuth } from "@/app/context/AuthContext";
+
+interface ActivityData {
+  id: string;
+  title: string;
+  category: string;
+  description: string;
+  imgSrc: string;
+  status: "upcoming" | "open" | "closed";
+  views: number;
+}
 
 export default function FavoritePage() {
-  const [favorites, setFavorites] = useState<string[]>([]);
-  const [activities, setActivities] = useState<any[]>([]);
+  const { user, openLogin } = useAuth();
+  const [activities, setActivities] = useState<ActivityData[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadFavorites = async () => {
     const userId = pb.authStore.model?.id;
+    
     if (!userId) {
       console.warn("⚠️ ยังไม่ได้ล็อกอิน ไม่สามารถโหลด favorites ได้");
-      setFavorites([]);
       setActivities([]);
       setLoading(false);
       return;
@@ -21,35 +33,39 @@ export default function FavoritePage() {
 
     try {
       setLoading(true);
-      const list = await pb.collection("Favorites").getList(1, 100, {
+      
+      // ✅ ดึง favorites พร้อม expand PostID
+      const list = await pb.collection("Favorites").getList<Favorite>(1, 100, {
         sort: "-created",
         expand: "PostID",
         filter: `UserID="${userId}"`,
-        requestKey: null,
+        requestKey: `favorites_${Date.now()}`,
       });
 
-      const posts = list.items
-        .map((fav: any) => {
+      const mappedActivities: ActivityData[] = list.items
+        .map((fav) => {
           const post = fav.expand?.PostID;
           if (!post) return null;
+
+          // ✅ ใช้ Verify อย่างเดียว (ไม่สนใจวันที่)
+          const status: "upcoming" | "open" | "closed" = post.Verify ? "open" : "closed";
+
           return {
             id: post.id,
             title: post.Topic || "ไม่มีชื่อกิจกรรม",
             category: post.Type || "ไม่ระบุประเภท",
-            description:
-              post.ViewDescription || post.AllDescription || "ไม่มีรายละเอียด",
+            description: post.ViewDescription || post.AllDescription || "ไม่มีรายละเอียด",
             imgSrc:
               post.Poster && post.Poster !== "N/A"
                 ? `${pb.baseUrl}/api/files/${post.collectionId}/${post.id}/${post.Poster}`
                 : "/images/activity.png",
-            status: post.Verify ? "open" : "closed",
+            status,
             views: post.ViewCount ?? 0,
           };
         })
-        .filter(Boolean);
+        .filter((item): item is ActivityData => item !== null);
 
-      setFavorites(list.items.map((f: any) => f.PostID));
-      setActivities(posts);
+      setActivities(mappedActivities);
     } catch (err) {
       console.error("❌ โหลดข้อมูล favorites ไม่สำเร็จ:", err);
     } finally {
@@ -58,11 +74,35 @@ export default function FavoritePage() {
   };
 
   useEffect(() => {
+    if (!user) {
+      setActivities([]);
+      setLoading(false);
+      return;
+    }
+
     loadFavorites();
+
     const updateListener = () => loadFavorites();
     window.addEventListener("favoritesUpdated", updateListener);
-    return () => window.removeEventListener("favoritesUpdated", updateListener);
-  }, []);
+    
+    return () => {
+      window.removeEventListener("favoritesUpdated", updateListener);
+    };
+  }, [user]);
+
+  if (!user) {
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center bg-[#F8F8F8]">
+        <p className="text-gray-600 mb-4">กรุณาเข้าสู่ระบบเพื่อดูรายการโปรด</p>
+        <button
+          onClick={openLogin}
+          className="px-6 py-2 bg-[#E35205] text-white rounded-lg hover:bg-[#d34700] transition"
+        >
+          เข้าสู่ระบบ
+        </button>
+      </main>
+    );
+  }
 
   if (loading) {
     return (

@@ -1,3 +1,4 @@
+// app/components/home/ActivityCard.tsx
 "use client";
 
 import Image from "next/image";
@@ -6,7 +7,7 @@ import { Heart } from "lucide-react";
 import { motion } from "framer-motion";
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/app/context/AuthContext";
-import pb from "@/lib/pocketbase";
+import pb, { Favorite, isAuthenticated, getCurrentUserId } from "@/lib/pocketbase";
 
 interface ActivityCardProps {
   id: string;
@@ -33,21 +34,25 @@ export function ActivityCard({
 
   // ✅ โหลดสถานะ favorite จาก PocketBase
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setIsFavorite(false);
+      return;
+    }
 
     const checkFavorite = async () => {
       try {
-        const userId = pb.authStore.model?.id;
+        const userId = getCurrentUserId();
         if (!userId) return;
 
-        const favs = await pb.collection("Favorites").getList(1, 1, {
+        const favs = await pb.collection("Favorites").getList<Favorite>(1, 1, {
           filter: `UserID="${userId}" && PostID="${id}"`,
-          requestKey: null,
+          requestKey: `check_fav_${id}_${Date.now()}`,
         });
 
         setIsFavorite(favs.items.length > 0);
-      } catch (err) {
+      } catch (err: any) {
         console.error("❌ Error checking favorite:", err);
+        console.error("Error details:", err?.response?.data);
       }
     };
 
@@ -58,36 +63,88 @@ export function ActivityCard({
   const toggleFavorite = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!user) return openLogin();
+    
+    if (!isAuthenticated()) {
+      openLogin();
+      return;
+    }
 
-    const userId = pb.authStore.model?.id;
-    if (!userId) return alert("⚠️ กรุณาเข้าสู่ระบบใหม่อีกครั้ง");
+    const userId = getCurrentUserId();
+    if (!userId) {
+      alert("⚠️ กรุณาเข้าสู่ระบบใหม่อีกครั้ง");
+      return;
+    }
 
-    console.log("🧭 toggleFavorite", { UserID: userId, PostID: id });
     setLoading(true);
 
     try {
-      const existing = await pb.collection("Favorites").getList(1, 1, {
+      // ✅ ตรวจสอบว่ามี favorite อยู่แล้วหรือไม่
+      const existing = await pb.collection("Favorites").getList<Favorite>(1, 1, {
         filter: `UserID="${userId}" && PostID="${id}"`,
-        requestKey: null,
+        requestKey: `toggle_fav_${id}_${Date.now()}`,
       });
 
       if (existing.items.length > 0) {
+        // ✅ ลบ favorite
         await pb.collection("Favorites").delete(existing.items[0].id);
         setIsFavorite(false);
+        console.log("✅ Removed from favorites");
       } else {
-        await pb.collection("Favorites").create({
-          UserID: userId,
-          PostID: id,
-          Notify: false,
-        });
-        setIsFavorite(true);
+        // ✅ เพิ่ม favorite - ใช้ field names ที่ถูกต้อง
+        try {
+          const newFavorite = await pb.collection("Favorites").create({
+            UserID: userId,      // relation field
+            PostID: id,          // relation field
+            Notify: false,
+          });
+          
+          setIsFavorite(true);
+          console.log("✅ Added to favorites:", newFavorite);
+        } catch (createErr: any) {
+          console.error("❌ Create favorite error:", createErr);
+          console.error("Error response:", createErr?.response);
+          console.error("Error data:", createErr?.response?.data);
+          
+          // ✅ ลองวิธีอื่นถ้า error - บาง PocketBase config ต้องการ format ต่างกัน
+          // ลองส่งเป็น object แทน
+          if (createErr?.response?.code === 400) {
+            console.log("🔄 Trying alternative format...");
+            try {
+              const altFavorite = await pb.collection("Favorites").create({
+                UserID: userId,
+                PostID: id,
+                Notify: false,
+              }, {
+                // Force sending as form data
+                requestKey: null,
+              });
+              
+              setIsFavorite(true);
+              console.log("✅ Added to favorites (alternative method):", altFavorite);
+            } catch (altErr) {
+              console.error("❌ Alternative method also failed:", altErr);
+              throw altErr;
+            }
+          } else {
+            throw createErr;
+          }
+        }
       }
 
+      // Dispatch event for other components
       window.dispatchEvent(new CustomEvent("favoritesUpdated"));
     } catch (err: any) {
       console.error("❌ toggleFavorite error:", err);
-      console.warn("📦 Error detail:", err?.response?.data || {});
+      console.error("Full error object:", {
+        message: err?.message,
+        status: err?.status,
+        response: err?.response,
+        data: err?.response?.data,
+      });
+      
+      // ✅ แสดง error message ที่เข้าใจง่าย
+      const errorMessage = err?.response?.data?.message || err?.message || "ไม่สามารถอัปเดตรายการโปรดได้";
+      alert(`เกิดข้อผิดพลาด: ${errorMessage}`);
     } finally {
       setLoading(false);
     }

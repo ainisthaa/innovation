@@ -1,3 +1,4 @@
+// app/components/auth/SettingDropdown.tsx
 "use client";
 
 import * as React from "react";
@@ -7,7 +8,7 @@ import {
   DropdownMenuContent,
 } from "@/components/ui/dropdown-menu";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import pb from "@/lib/pocketbase";
+import pb, { User } from "@/lib/pocketbase";
 
 interface SettingDropdownProps {
   user: { studentId: string; name: string };
@@ -17,17 +18,26 @@ interface SettingDropdownProps {
 export function SettingDropdown({ user, onLogout }: SettingDropdownProps) {
   const [notify, setNotify] = React.useState(false);
   const [isOpen, setIsOpen] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
     async function loadNotifySetting() {
       try {
         const userId = pb.authStore.model?.id;
-        if (!userId) return;
+        if (!userId) {
+          setLoading(false);
+          return;
+        }
 
-        const record = await pb.collection("users").getOne(userId);
+        const record = await pb.collection("users").getOne<User>(userId, {
+          requestKey: `user_${userId}_${Date.now()}`,
+        });
+        
         setNotify(record.NotifyEnabled ?? false);
       } catch (err) {
         console.error("❌ โหลดการตั้งค่าการแจ้งเตือนไม่สำเร็จ:", err);
+      } finally {
+        setLoading(false);
       }
     }
 
@@ -40,6 +50,7 @@ export function SettingDropdown({ user, onLogout }: SettingDropdownProps) {
       if (!userId) return;
 
       const newNotify = !notify;
+      
       await pb.collection("users").update(userId, {
         NotifyEnabled: newNotify,
       });
@@ -47,6 +58,7 @@ export function SettingDropdown({ user, onLogout }: SettingDropdownProps) {
       setNotify(newNotify);
     } catch (err) {
       console.error("❌ บันทึกการตั้งค่าการแจ้งเตือนไม่สำเร็จ:", err);
+      alert("ไม่สามารถบันทึกการตั้งค่าได้");
     }
   };
 

@@ -1,13 +1,15 @@
+// app/activities/[id]/page.tsx
 "use client";
 
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import pb from "@/lib/pocketbase";
-import { ActivityDetail } from "./components/ActivityDetail";
+
 import { RelatedActivities } from "./components/RelatedActivities";
+import { ActivityDetail } from "./components/ActivityDetail";
 
 export default function ActivityDetailPage() {
-  const { id } = useParams(); // รับ id จาก URL เช่น /activities/7fi8yhh90rl29d3
+  const { id } = useParams();
   const [activity, setActivity] = useState<any | null>(null);
   const [related, setRelated] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,21 +38,30 @@ export default function ActivityDetailPage() {
           endDate: record.CloseRegister || "-",
           maxParticipants: record.MaxRegister || 0,
           views: record.ViewCount ?? 0,
-          isOpen: record.Verify ?? false,
+          isOpen: record.Verify ?? false, // ✅ ใช้ Verify อย่างเดียว
           imgSrc:
             record.Poster && record.Poster !== "N/A"
               ? `${pb.baseUrl}/api/files/${record.collectionId}/${record.id}/${record.Poster}`
               : "/images/activity.png",
+          registerLink: record.RegisterLink || "",
         });
 
-        // ✅ ดึงกิจกรรมอื่น (ยกเว้น id ปัจจุบัน)
-        const list = await pb.collection("Posts").getList(1, 4, {
-          filter: `id != "${id}"`,
+        // ✅ ดึงกิจกรรมอื่น (ยกเว้น id ปัจจุบัน) และกรองเฉพาะที่ Verify = true
+        const list = await pb.collection("Posts").getList(1, 10, {
+          filter: `id != "${id}" && Verify = true`, // ✅ กรองเฉพาะที่ Verify = true
           sort: "-created",
         });
 
-        setRelated(
-          list.items.map((item: any) => ({
+        console.log("🔍 [ActivityDetailPage] Related posts from DB:", list.items);
+        console.log("🔍 [ActivityDetailPage] Number of related posts:", list.items.length);
+
+        const relatedActivities = list.items.map((item: any) => {
+          // ✅ คำนวณ status จาก Verify
+          const status: "upcoming" | "open" | "closed" = item.Verify ? "open" : "closed";
+          
+          console.log(`🔍 Mapping item ${item.id} - Verify: ${item.Verify}, Status: ${status}`);
+          
+          return {
             id: item.id,
             title: item.Topic || "ไม่มีชื่อกิจกรรม",
             category: item.Type || "ไม่ระบุประเภท",
@@ -59,10 +70,14 @@ export default function ActivityDetailPage() {
               item.Poster && item.Poster !== "N/A"
                 ? `${pb.baseUrl}/api/files/${item.collectionId}/${item.id}/${item.Poster}`
                 : "/images/activity.png",
-            status: item.Verify ? "open" : "closed",
+            status: status, // ✅ ส่ง status ที่คำนวณแล้ว
             views: item.ViewCount ?? 0,
-          }))
-        );
+          };
+        });
+
+        console.log("🔍 [ActivityDetailPage] Related activities after mapping:", relatedActivities);
+        
+        setRelated(relatedActivities);
       } catch (err) {
         console.error("❌ โหลดข้อมูลกิจกรรมไม่สำเร็จ:", err);
       } finally {
