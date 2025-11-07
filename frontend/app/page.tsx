@@ -3,7 +3,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import pb, { Post, getImageUrl } from "@/lib/pocketbase";
+import pb, { Post, getImageUrl, calculatePostStatus } from "@/lib/pocketbase";
 import { ActivityCard } from "./components/home/ActivityCard";
 import { PaginationSection } from "./components/home/PaginationSection";
 import SearchSection from "./components/home/SearchSection";
@@ -40,36 +40,40 @@ function HomePageContent() {
 
         let filters = [];
         
-        // ✅ Search in Topic, ViewDescription, AllDescription
         if (q) {
           filters.push(`(Topic ~ "${q}" || ViewDescription ~ "${q}" || AllDescription ~ "${q}")`);
         }
         
-        // Note: Faculty/Department ยังไม่มีใน Backend
-        // เมื่อเพิ่มใน PocketBase แล้ว uncomment บรรทัดด้านล่าง
-        // if (faculty) filters.push(`Faculty = "${faculty}"`);
-        // if (department) filters.push(`Department = "${department}"`);
+        if (type) {
+          filters.push(`Type="${type}"`);
+        }
         
-        if (type) filters.push(`Type = "${type}"`);
+        if (faculty) {
+          filters.push(`Faculty="${faculty}"`);
+        }
+        
+        if (department) {
+          filters.push(`Department="${department}"`);
+        }
 
         const filterString = filters.length > 0 ? filters.join(" && ") : "";
 
-        // ✅ Type-safe query
         const list = await pb.collection("Posts").getList<Post>(1, 100, {
           sort: "-created",
           filter: filterString,
+          expand: "Type,Faculty,Department",
           requestKey: `posts_${Date.now()}`,
         });
 
-        // ✅ Map to ActivityData - ใช้ Verify อย่างเดียว (ไม่สนใจวันที่)
+        // ✅ Map to ActivityData - ใช้ calculatePostStatus
         const mappedActivities: ActivityData[] = list.items.map((item) => {
-          // Verify = true → open, Verify = false → closed
-          const status: "upcoming" | "open" | "closed" = item.Verify ? "open" : "closed";
+          const status = calculatePostStatus(item); // ✅ ใช้ Status จาก PocketBase
+          const typeName = item.expand?.Type?.TypeName || item.Type || "ไม่ระบุประเภท";
           
           return {
             id: item.id,
             title: item.Topic || "ไม่มีชื่อกิจกรรม",
-            category: item.Type || "ไม่ระบุประเภท",
+            category: typeName,
             description: item.ViewDescription || item.AllDescription || "ไม่มีรายละเอียดกิจกรรม",
             imgSrc: getImageUrl(item, item.Poster),
             status: status,
@@ -148,7 +152,7 @@ function HomePageContent() {
               currentPage={currentPage}
               totalPages={totalPages}
               onPageChange={setCurrentPage}
-            />
+              />
           </div>
         )}
       </section>

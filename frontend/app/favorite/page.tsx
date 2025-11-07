@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { ActivityCard } from "@/app/components/home/ActivityCard";
-import pb, { Favorite, Post } from "@/lib/pocketbase";
+import pb, { Favorite, Post, getImageUrl, calculatePostStatus } from "@/lib/pocketbase";
 import { useAuth } from "@/app/context/AuthContext";
 
 interface ActivityData {
@@ -34,31 +34,31 @@ export default function FavoritePage() {
     try {
       setLoading(true);
       
-      // ✅ ดึง favorites พร้อม expand PostID
+      // ✅ ดึง favorites พร้อม expand PostID และ Type
       const list = await pb.collection("Favorites").getList<Favorite>(1, 100, {
         sort: "-created",
-        expand: "PostID",
+        expand: "PostID,PostID.Type",
         filter: `UserID="${userId}"`,
         requestKey: `favorites_${Date.now()}`,
       });
 
       const mappedActivities: ActivityData[] = list.items
         .map((fav) => {
-          const post = fav.expand?.PostID;
+          const post = fav.expand?.PostID as Post | undefined;
           if (!post) return null;
 
-          // ✅ ใช้ Verify อย่างเดียว (ไม่สนใจวันที่)
-          const status: "upcoming" | "open" | "closed" = post.Verify ? "open" : "closed";
+          // ✅ ใช้ calculatePostStatus แทน
+          const status = calculatePostStatus(post);
+          
+          // ✅ ดึงชื่อ Type จาก expand
+          const typeName = post.expand?.Type?.TypeName || post.Type || "ไม่ระบุประเภท";
 
           return {
             id: post.id,
             title: post.Topic || "ไม่มีชื่อกิจกรรม",
-            category: post.Type || "ไม่ระบุประเภท",
+            category: typeName,
             description: post.ViewDescription || post.AllDescription || "ไม่มีรายละเอียด",
-            imgSrc:
-              post.Poster && post.Poster !== "N/A"
-                ? `${pb.baseUrl}/api/files/${post.collectionId}/${post.id}/${post.Poster}`
-                : "/images/activity.png",
+            imgSrc: getImageUrl(post, post.Poster),
             status,
             views: post.ViewCount ?? 0,
           };

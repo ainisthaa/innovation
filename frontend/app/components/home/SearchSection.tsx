@@ -4,120 +4,86 @@
 import { ChevronDown } from "lucide-react";
 import React, { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import pb, { Post } from "@/lib/pocketbase";
+import { getAllTypes, getAllFaculties, getAllDepartments, TypeRecord, Faculty, Department } from "@/lib/pocketbase";
 
 export default function SearchBar() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  
   const [searchText, setSearchText] = useState(searchParams.get("q") || "");
-  const [faculty, setFaculty] = useState(searchParams.get("faculty") || "");
-  const [department, setDepartment] = useState(searchParams.get("department") || "");
-  const [type, setType] = useState(searchParams.get("type") || "");
+  const [selectedFacultyId, setSelectedFacultyId] = useState(searchParams.get("faculty") || "");
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState(searchParams.get("department") || "");
+  const [selectedTypeId, setSelectedTypeId] = useState(searchParams.get("type") || "");
   
-  // ✅ Hardcode รายการคณะไว้ก่อน (รอ backend เพิ่ม field Faculty)
-  const [faculties] = useState<string[]>([
-    "คณะวิศวกรรมศาสตร์",
-    "คณะสถาปัตยกรรม ศิลปะและการออกแบบ",
-    "คณะครุศาสตร์อุตสาหกรรมและเทคโนโลยี",
-    "คณะเทคโนโลยีการเกษตร",
-    "คณะวิทยาศาสตร์",
-    "คณะอุตสาหกรรมอาหาร",
-    "คณะเทคโนโลยีสารสนเทศ",
-    "วิทยาลัยนานาชาติ",
-    "วิทยาลัยเทคโนโลยีและนวัตกรรมวัสดุ",
-    "วิทยาลัยนวัตกรรมการผลิตขั้นสูง",
-    "คณะบริหารธุรกิจ",
-    "วิทยาลัยอุตสาหกรรมการบินนานาชาติ",
-    "คณะศิลปศาสตร์",
-    "คณะแพทยศาสตร์",
-    "คณะทันตแพทยศาสตร์",
-    "สำนักวิชาศึกษาทั่วไป",
-    "นักศึกษาแลกเปลี่ยน",
-  ]);
-  
-  // ✅ Mock data: สาขาแยกตามคณะ
-  const facultyDepartmentMap: { [key: string]: string[] } = {
-    "คณะวิศวกรรมศาสตร์": [
-      "วิศวกรรมโทรคมนาคม",
-      "วิศวกรรมไฟฟ้า",
-      "วิศวกรรมอิเล็กทรอนิกส์",
-      "วิศวกรรมระบบควบคุม",
-      "วิศวกรรมคอมพิวเตอร์",
-      "วิศวกรรมเครื่องกล",
-      "วิศวกรรมการจัดการและควบคุม",
-    ],
-    "คณะสถาปัตยกรรม ศิลปะและการออกแบบ": [
-      "วิศวกรรมโยธา",
-      "วิศวกรรมเกษตร",
-      "วิศวกรรมเคมี",
-      "วิศวกรรมอาหาร",
-      "วิศวกรรมสารสนเทศ",
-      "ยังไม่เลือกภาควิชา",
-      "วิศวกรรมอุตสาหการ",
-    ],
-    "คณะครุศาสตร์อุตสาหกรรมและเทคโนโลยี": [
-      "วิศวกรรมอัตโนมัติ",
-      "วิศวกรรมบ่อกันประเทศ",
-      "วิศวกรรมการบินและนักบินพาณิชย์",
-      "วิศวกรรมซีวิการแพทย์",
-      "สำนักงานบริหารหลักสูตรวิศวกรรมศาสตร์นานาชาติ",
-      "วิศวกรรมพลังงาน",
-    ],
-    "คณะเทคโนโลยีการเกษตร": [
-      "วิศวกรรมและการเป็นผู้ประกอบการ",
-      "คณะวิศวกรรมศาสตร์ ไม่ประจำภาควิชา",
-      "วิศวกรรมหุ่นยนต์และปัญญาประดิษฐ์",
-      "วิศวกรรมระบบไอโอทีและสารสนเทศ",
-    ],
-    // เพิ่มคณะอื่นๆ ตามต้องการ...
-  };
-  
-  const [departments, setDepartments] = useState<string[]>([]);
-  const [types, setTypes] = useState<string[]>([]);
+  // ✅ State สำหรับเก็บข้อมูลจาก PocketBase
+  const [types, setTypes] = useState<TypeRecord[]>([]);
+  const [faculties, setFaculties] = useState<Faculty[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   
   const [showFaculty, setShowFaculty] = useState(false);
   const [showDepartment, setShowDepartment] = useState(false);
   const [showType, setShowType] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // ✅ โหลด Types จาก PocketBase
   useEffect(() => {
-    async function fetchFilters() {
+    async function loadTypes() {
       try {
-        setLoading(true);
-        
-        // ✅ Type-safe query with Post interface
-        const list = await pb.collection("Posts").getList<Post>(1, 500, {
-          fields: "Type",
-          requestKey: `filters_${Date.now()}`,
-        });
-
-        const typeSet = new Set<string>();
-
-        // ✅ Type-safe iteration
-        list.items.forEach((item) => {
-          if (item.Type && item.Type !== "N/A") {
-            typeSet.add(item.Type);
-          }
-        });
-
-        setTypes(Array.from(typeSet).sort());
-      } catch (err) {
-        console.error("❌ โหลดตัวกรองไม่สำเร็จ:", err);
+        const result = await getAllTypes();
+        if (result.success && result.data) {
+          setTypes(result.data);
+        }
+      } catch (error) {
+        console.error("❌ โหลด Types ไม่สำเร็จ:", error);
       } finally {
         setLoading(false);
       }
     }
-
-    fetchFilters();
+    loadTypes();
   }, []);
+
+  // ✅ โหลด Faculties จาก PocketBase
+  useEffect(() => {
+    async function loadFaculties() {
+      try {
+        const result = await getAllFaculties();
+        if (result.success && result.data) {
+          setFaculties(result.data);
+        }
+      } catch (error) {
+        console.error("❌ โหลด Faculties ไม่สำเร็จ:", error);
+      }
+    }
+    loadFaculties();
+  }, []);
+
+  // ✅ โหลด Departments ตาม Faculty ที่เลือก
+  useEffect(() => {
+    async function loadDepartments() {
+      if (!selectedFacultyId) {
+        setDepartments([]);
+        return;
+      }
+
+      try {
+        const result = await getAllDepartments(selectedFacultyId);
+        if (result.success && result.data) {
+          setDepartments(result.data);
+        }
+      } catch (error) {
+        console.error("❌ โหลด Departments ไม่สำเร็จ:", error);
+      }
+    }
+    loadDepartments();
+  }, [selectedFacultyId]);
 
   const handleSearch = () => {
     const params = new URLSearchParams();
     
     if (searchText.trim()) params.set("q", searchText.trim());
-    if (faculty) params.set("faculty", faculty);
-    if (department) params.set("department", department);
-    if (type) params.set("type", type);
+    if (selectedFacultyId) params.set("faculty", selectedFacultyId);
+    if (selectedDepartmentId) params.set("department", selectedDepartmentId);
+    if (selectedTypeId) params.set("type", selectedTypeId);
 
     router.push(`/?${params.toString()}`);
   };
@@ -145,6 +111,12 @@ export default function SearchBar() {
     };
   }, [showFaculty, showDepartment, showType]);
 
+  // ✅ Helper: หาชื่อจาก ID
+  const getDisplayName = (id: string, list: any[], nameKey: string) => {
+    const item = list.find((x) => x.id === id);
+    return item ? item[nameKey] : "";
+  };
+
   return (
     <div className="w-[1058px] h-[136px] bg-[#FF9236] rounded-[20px] mx-auto shadow-[5px_5px_4px_rgba(0,0,0,0.25)] flex flex-col items-center justify-center space-y-4">
       <div className="flex items-center justify-center gap-3">
@@ -166,7 +138,7 @@ export default function SearchBar() {
       </div>
 
       <div className="flex justify-start gap-[16px] mt-[6px] ml-[-115px]" style={{ width: "866px" }}>
-        {/* Dropdown คณะ */}
+        {/* ✅ Dropdown คณะ */}
         <div className="relative" style={{ width: "278px", height: "32px" }}>
           <div
             onClick={(e) => {
@@ -177,8 +149,12 @@ export default function SearchBar() {
             }}
             className="bg-white rounded-full flex items-center justify-between px-6 text-gray-700 cursor-pointer border-none shadow-sm h-full"
           >
-            <span className="text-gray-500 text-sm">{faculty || "คณะ"}</span>
-            <ChevronDown className="text-black" size={16} />
+            <span className="text-gray-500 text-sm truncate">
+              {selectedFacultyId 
+                ? getDisplayName(selectedFacultyId, faculties, "FacultyName") 
+                : "คณะ"}
+            </span>
+            <ChevronDown className="text-black flex-shrink-0" size={16} />
           </div>
           {showFaculty && (
             <div 
@@ -187,47 +163,53 @@ export default function SearchBar() {
             >
               <div
                 onClick={() => {
-                  setFaculty("");
-                  setDepartment(""); // ✅ รีเซ็ตสาขาด้วย
-                  setDepartments([]); // ✅ เคลียร์รายการสาขา
+                  setSelectedFacultyId("");
+                  setSelectedDepartmentId("");
+                  setDepartments([]);
                   setShowFaculty(false);
                 }}
                 className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
               >
                 ทั้งหมด
               </div>
-              {faculties.map((f) => (
+              {faculties.map((faculty) => (
                 <div
-                  key={f}
+                  key={faculty.id}
                   onClick={() => {
-                    setFaculty(f);
-                    setDepartment(""); // ✅ รีเซ็ตสาขาเมื่อเปลี่ยนคณะ
-                    // ✅ อัปเดตรายการสาขาตามคณะที่เลือก
-                    setDepartments(facultyDepartmentMap[f] || []);
+                    setSelectedFacultyId(faculty.id);
+                    setSelectedDepartmentId(""); // รีเซ็ตสาขา
                     setShowFaculty(false);
                   }}
                   className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
                 >
-                  {f}
+                  {faculty.FacultyName}
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        {/* Dropdown สาขา */}
+        {/* ✅ Dropdown สาขา */}
         <div className="relative" style={{ width: "278px", height: "32px" }}>
           <div
             onClick={(e) => {
               e.stopPropagation();
-              setShowDepartment(!showDepartment);
-              setShowFaculty(false);
-              setShowType(false);
+              if (selectedFacultyId) {
+                setShowDepartment(!showDepartment);
+                setShowFaculty(false);
+                setShowType(false);
+              }
             }}
-            className="bg-white rounded-full flex items-center justify-between px-6 text-gray-700 cursor-pointer border-none shadow-sm h-full"
+            className={`bg-white rounded-full flex items-center justify-between px-6 text-gray-700 border-none shadow-sm h-full ${
+              selectedFacultyId ? "cursor-pointer" : "cursor-not-allowed opacity-50"
+            }`}
           >
-            <span className="text-gray-500 text-sm">{department || "สาขา"}</span>
-            <ChevronDown className="text-black" size={16} />
+            <span className="text-gray-500 text-sm truncate">
+              {selectedDepartmentId 
+                ? getDisplayName(selectedDepartmentId, departments, "DepartmentName") 
+                : "สาขา"}
+            </span>
+            <ChevronDown className="text-black flex-shrink-0" size={16} />
           </div>
           {showDepartment && departments.length > 0 && (
             <div 
@@ -236,23 +218,23 @@ export default function SearchBar() {
             >
               <div
                 onClick={() => {
-                  setDepartment("");
+                  setSelectedDepartmentId("");
                   setShowDepartment(false);
                 }}
                 className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
               >
                 ทั้งหมด
               </div>
-              {departments.map((d) => (
+              {departments.map((dept) => (
                 <div
-                  key={d}
+                  key={dept.id}
                   onClick={() => {
-                    setDepartment(d);
+                    setSelectedDepartmentId(dept.id);
                     setShowDepartment(false);
                   }}
                   className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
                 >
-                  {d}
+                  {dept.DepartmentName}
                 </div>
               ))}
             </div>
@@ -269,7 +251,7 @@ export default function SearchBar() {
           )}
         </div>
 
-        {/* Dropdown ประเภท */}
+        {/* ✅ Dropdown ประเภท */}
         <div className="relative" style={{ width: "278px", height: "32px" }}>
           <div
             onClick={(e) => {
@@ -280,8 +262,12 @@ export default function SearchBar() {
             }}
             className="bg-white rounded-full flex items-center justify-between px-6 text-gray-700 cursor-pointer border-none shadow-sm h-full"
           >
-            <span className="text-gray-500 text-sm">{type || "ประเภท"}</span>
-            <ChevronDown className="text-black" size={16} />
+            <span className="text-gray-500 text-sm truncate">
+              {selectedTypeId 
+                ? getDisplayName(selectedTypeId, types, "TypeName") 
+                : "ประเภท"}
+            </span>
+            <ChevronDown className="text-black flex-shrink-0" size={16} />
           </div>
           {showType && types.length > 0 && (
             <div 
@@ -290,23 +276,23 @@ export default function SearchBar() {
             >
               <div
                 onClick={() => {
-                  setType("");
+                  setSelectedTypeId("");
                   setShowType(false);
                 }}
                 className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
               >
                 ทั้งหมด
               </div>
-              {types.map((t) => (
+              {types.map((type) => (
                 <div
-                  key={t}
+                  key={type.id}
                   onClick={() => {
-                    setType(t);
+                    setSelectedTypeId(type.id);
                     setShowType(false);
                   }}
                   className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
                 >
-                  {t}
+                  {type.TypeName}
                 </div>
               ))}
             </div>

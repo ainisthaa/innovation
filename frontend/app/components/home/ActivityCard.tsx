@@ -52,7 +52,6 @@ export function ActivityCard({
         setIsFavorite(favs.items.length > 0);
       } catch (err: any) {
         console.error("❌ Error checking favorite:", err);
-        console.error("Error details:", err?.response?.data);
       }
     };
 
@@ -90,43 +89,67 @@ export function ActivityCard({
         setIsFavorite(false);
         console.log("✅ Removed from favorites");
       } else {
-        // ✅ เพิ่ม favorite - ใช้ field names ที่ถูกต้อง
+        // ✅ เพิ่ม favorite
+        console.log("🔍 Attempting to create favorite with:", {
+          UserID: userId,
+          PostID: id,
+          Notify: false,
+        });
+
         try {
-          const newFavorite = await pb.collection("Favorites").create({
-            UserID: userId,      // relation field
-            PostID: id,          // relation field
-            Notify: false,
-          });
+          // ✅ CRITICAL FIX: ส่งข้อมูลแบบ FormData แทน JSON
+          const formData = new FormData();
+          formData.append("UserID", userId);
+          formData.append("PostID", id);
+          formData.append("Notify", "false");
+
+          const newFavorite = await pb.collection("Favorites").create(formData);
           
           setIsFavorite(true);
           console.log("✅ Added to favorites:", newFavorite);
         } catch (createErr: any) {
           console.error("❌ Create favorite error:", createErr);
-          console.error("Error response:", createErr?.response);
-          console.error("Error data:", createErr?.response?.data);
           
-          // ✅ ลองวิธีอื่นถ้า error - บาง PocketBase config ต้องการ format ต่างกัน
-          // ลองส่งเป็น object แทน
-          if (createErr?.response?.code === 400) {
-            console.log("🔄 Trying alternative format...");
+          // ✅ แสดง error details แบบละเอียด
+          if (createErr?.response?.data) {
+            console.error("📋 Error data:", JSON.stringify(createErr.response.data, null, 2));
+          }
+          
+          // ✅ ลองอีกครั้งด้วย JSON ธรรมดา (บาง PocketBase version ต้องการ JSON)
+          try {
+            const newFavorite = await pb.collection("Favorites").create({
+              UserID: userId,
+              PostID: id,
+              Notify: false,
+            }, {
+              // ส่ง header เป็น JSON
+              headers: {
+                "Content-Type": "application/json",
+              },
+            });
+            
+            setIsFavorite(true);
+            console.log("✅ Added to favorites (JSON method):", newFavorite);
+          } catch (jsonErr: any) {
+            console.error("❌ JSON method also failed:", jsonErr);
+            
+            // ลองวิธีสุดท้าย: ใช้ SDK อย่างเดียว ไม่ส่ง options
             try {
-              const altFavorite = await pb.collection("Favorites").create({
-                UserID: userId,
-                PostID: id,
-                Notify: false,
-              }, {
-                // Force sending as form data
-                requestKey: null,
+              const record = await pb.send("/api/collections/Favorites/records", {
+                method: "POST",
+                body: {
+                  UserID: userId,
+                  PostID: id,
+                  Notify: false,
+                },
               });
               
               setIsFavorite(true);
-              console.log("✅ Added to favorites (alternative method):", altFavorite);
-            } catch (altErr) {
-              console.error("❌ Alternative method also failed:", altErr);
-              throw altErr;
+              console.log("✅ Added to favorites (manual API):", record);
+            } catch (apiErr) {
+              console.error("❌ Manual API method failed:", apiErr);
+              throw createErr; // โยน error แรกออกมา
             }
-          } else {
-            throw createErr;
           }
         }
       }
@@ -135,15 +158,33 @@ export function ActivityCard({
       window.dispatchEvent(new CustomEvent("favoritesUpdated"));
     } catch (err: any) {
       console.error("❌ toggleFavorite error:", err);
-      console.error("Full error object:", {
+      
+      // ✅ สร้าง error message ที่อ่านง่าย
+      let errorMessage = "ไม่สามารถอัปเดตรายการโปรดได้";
+      
+      if (err?.response?.data) {
+        const data = err.response.data;
+        
+        // แสดง field validation errors
+        if (data.data) {
+          const fieldErrors = Object.entries(data.data)
+            .map(([field, error]) => `${field}: ${JSON.stringify(error)}`)
+            .join("\n");
+          errorMessage = `ข้อมูลไม่ถูกต้อง:\n${fieldErrors}`;
+        } else if (data.message) {
+          errorMessage = data.message;
+        }
+      } else if (err?.message) {
+        errorMessage = err.message;
+      }
+      
+      console.error("📋 Full error:", {
         message: err?.message,
         status: err?.status,
         response: err?.response,
         data: err?.response?.data,
       });
       
-      // ✅ แสดง error message ที่เข้าใจง่าย
-      const errorMessage = err?.response?.data?.message || err?.message || "ไม่สามารถอัปเดตรายการโปรดได้";
       alert(`เกิดข้อผิดพลาด: ${errorMessage}`);
     } finally {
       setLoading(false);
@@ -152,10 +193,10 @@ export function ActivityCard({
 
   const badge =
     status === "open"
-      ? { text: "เปิดรับสมัครแล้ว", bg: "bg-green-500 text-black" }
+      ? { text: "เปิดรับสมัครแล้ว", bg: "bg-green-500 text-white" }
       : status === "closed"
-      ? { text: "ปิดรับสมัครแล้ว", bg: "bg-red-500 text-black" }
-      : { text: "เตรียมเปิดรับสมัคร", bg: "bg-gray-400 text-black" };
+      ? { text: "ปิดรับสมัครแล้ว", bg: "bg-red-500 text-white" }
+      : { text: "เตรียมเปิดรับสมัคร", bg: "bg-gray-400 text-white" };
 
   return (
     <div className="relative">
@@ -172,6 +213,7 @@ export function ActivityCard({
               height={200}
               className="object-cover h-full w-full"
               priority
+              unoptimized
             />
             <span
               className={`absolute top-3 left-3 text-sm font-semibold px-3 py-1 rounded-md ${badge.bg}`}
